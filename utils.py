@@ -396,3 +396,18 @@ def largest_eigs_dense(A, n_eigs=1):
         raise
 
     return eigvals[:n_eigs], eigvecs[:, :n_eigs]
+
+
+def printf(label, i, out_of = 0, add_1=True):
+    if add_1:
+        index = i + 1
+    else:
+        index = i
+    if out_of != 0:
+        print(f'\r{label}: {index}/{out_of}', flush=True, end='')
+    else:
+        print(f'\r{label}: {index}', flush=True, end='')
+    if out_of != 0:
+        if i == out_of-1:
+            print('\nFinished.')
+    return

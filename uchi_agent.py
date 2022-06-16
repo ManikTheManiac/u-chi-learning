@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from frozen_lake_env import ModifiedFrozenLake, MAPS
 from gym.wrappers import TimeLimit
-from utils import get_dynamics_and_rewards, solve_unconstrained, solve_unconstrained_v1, get_mdp_transition_matrix
+from utils import get_dynamics_and_rewards, printf, solve_unconstrained, solve_unconstrained_v1, get_mdp_transition_matrix
 from visualization import make_animation, plot_dist
 from scipy.sparse import csr_matrix, coo_matrix, lil_matrix
 import itertools
@@ -66,6 +66,7 @@ errs = []
 
 
 for i in range(n_iteration):
+    printf('Iteration', i, n_iteration)
     loguold = logu # Set old logu to current logu (so we can learn and calculate error between the two)
     # Loop over all state action pairs
     for state in range(n_states):
