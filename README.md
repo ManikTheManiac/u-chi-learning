@@ -6,4 +6,4 @@ gym version: ?
 Comparisons:
 
 ![eigvec](both_us.png)
-![policy](us_only.png)
+![policy](both_pis.png)
