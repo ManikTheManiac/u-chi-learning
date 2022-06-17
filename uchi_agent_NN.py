@@ -1,7 +1,8 @@
 """
-Model-free algorithm, uses experience collected in batches.
+Model-free algorithm, uses experience from (fixed) prior policy.
+Uses a neural network for function approximation of u and chi.
 """
-
+raise NotImplementedError
 import matplotlib.pyplot as plt
 import numpy as np
 from frozen_lake_env import ModifiedFrozenLake, MAPS

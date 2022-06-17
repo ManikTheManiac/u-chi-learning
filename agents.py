@@ -1,12 +1,16 @@
 import numpy as np
-
+from copy import deepcopy
 from utils import chi
 
+
 class MF_uchi:
-    def __init__(self, env, beta=1, u_ref_state=None, prior_policy=None) -> None:
+    def __init__(self, env, beta=1, u_ref_state=None, prior_policy=None, stochastic=False) -> None:
 
         self.env = env
+        self.env_copy = deepcopy(env)
         self.beta = beta
+        self.stochastic = stochastic
+
         if u_ref_state is None:
             self.u_ref_state = (0, 0)
         else:
@@ -21,6 +25,19 @@ class MF_uchi:
         # Take a step to find the reference reward and the chi reference state (next state)
         self.env.reset()
         self.env.s, action = self.u_ref_state
+        # if stochastic:
+        #     n_samples=10
+        #     self.chi_ref_state = []
+        #     self.reference_reward = 0
+        #     for i in range(n_samples):
+        #         self.env.reset()
+        #         self.env.s, action = self.u_ref_state
+        #         chi_ref, ref_rwd, _, _ = self.env.step(action)
+        #         self.chi_ref_state.append(chi_ref)
+        #         self.reference_reward += ref_rwd
+        #     self.reference_reward /= n_samples
+            
+        # else:
         self.chi_ref_state, self.reference_reward, _, _ = self.env.step(action)
 
         self.init_u = np.ones((self.env.nS, self.env.nA)) 
@@ -37,10 +54,27 @@ class MF_uchi:
         for (state, action, reward, next_state, next_action), _ in sarsa_experience:
             loguold = self.logu
 
-            delta_reward = reward - self.reference_reward
 
             # Update log(u) based on the u-chi relationship
-            self.logu[state,action] = (beta * delta_reward + np.log(self.chi[next_state]/self.ref_chi) )      
+            if not self.stochastic:
+                delta_reward = reward - self.reference_reward
+                self.logu[state,action] = (beta * delta_reward + np.log(self.chi[next_state]/self.ref_chi) )     
+            
+            if self.stochastic:
+                raise NotImplementedError
+                # We have to sample from the next available reference state and corresponding reward
+                # We make a copy of the environment, start it in the reference state, and take a step
+                # We then update the logu and chi
+                sample_sum = 0
+                num_samples = 10
+                for i in range(num_samples):
+                    self.env_copy.reset()
+                    self.env_copy.s, action = self.u_ref_state
+                    chi_ref_state, reference_reward, _, _ = self.env_copy.step(action)
+                    delta_reward = reward - reference_reward
+                    sample_sum += (beta * delta_reward + np.log(self.chi[next_state]/self.chi[chi_ref_state]) )     
+
+                self.logu[state,action] = sample_sum / num_samples
             
             # Learn logu update    
             self.logu = loguold * (1 - alpha) + alpha * self.logu
