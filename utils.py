@@ -411,44 +411,38 @@ def printf(label, i, out_of = 0, add_1=True):
         if i == out_of-1:
             print('\nFinished.')
     return
+    
 
-def explore_environment(env, n_episodes, policy, start_state=None, start_action=None):
-    if policy is None:
-        policy = np.ones((env.nS, env.nA)) / env.nA
+import itertools
+from joblib import Parallel, delayed
+
+def training_episode(env, training_policy):
+    sarsa_experience = []
 
     state = env.reset()
-
-    if start_state is not None:
-        state = start_state
-        try:
-            env.unwrapped.s = state
-        except:
-            env.s = state
-        
-    if start_action is not None:
-        try:
-            env.unwrapped.a = start_action
-        except:
-            env.a = start_action
-
+    action = np.random.choice(env.nA, p=training_policy[state])
     done = False
-    episode_reward = 0
-    t = 0
     while not done:
+        next_state, reward, done, _ = env.step(action)
+        next_action = np.random.choice(env.nA, p=training_policy[next_state])
+        sarsa_experience.append(((state, action, reward, next_state, next_action), done))
+        state, action = next_state, next_action
 
-        if t == 0:
-            action = start_action if start_action is not None else random_choice(env.nA, p=policy[state])
-        else:
-            # Sample action from action probability distribution
-            action = random_choice(env.action_space.n, p=policy[state])
+    return sarsa_experience
 
-        # Apply the sampled action in our environment
-        state, reward, done, _ = env.step(action)
+def gather_experience(env, training_policy, batch_size, n_jobs=1):
+    if n_jobs > 1:
+        split_experience = Parallel(n_jobs=n_jobs, backend='loky')(delayed(training_episode)(env, training_policy) for _ in range(batch_size))
+    elif n_jobs == 1:
+        split_experience = [training_episode(env, training_policy) for _ in range(batch_size)]
 
-        episode_reward += gamma**t * reward
+    return list(itertools.chain.from_iterable(split_experience))
 
-        # if beta != np.inf:
-        #     # Add the entropic cost!
-        #     episode_reward -= (1/beta) * np.log(policy[state,action]/prior_policy[state, action])
-        t += 1
 
+
+def chi(u, nS, nA, prior_policy=None):
+    if prior_policy is None:
+        prior_policy = np.ones((nS, nA)) / nA
+
+    u = u.reshape(nS, nA)
+    return (prior_policy * u).sum(axis=1)
