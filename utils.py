@@ -411,3 +411,44 @@ def printf(label, i, out_of = 0, add_1=True):
         if i == out_of-1:
             print('\nFinished.')
     return
+
+def explore_environment(env, n_episodes, policy, start_state=None, start_action=None):
+    if policy is None:
+        policy = np.ones((env.nS, env.nA)) / env.nA
+
+    state = env.reset()
+
+    if start_state is not None:
+        state = start_state
+        try:
+            env.unwrapped.s = state
+        except:
+            env.s = state
+        
+    if start_action is not None:
+        try:
+            env.unwrapped.a = start_action
+        except:
+            env.a = start_action
+
+    done = False
+    episode_reward = 0
+    t = 0
+    while not done:
+
+        if t == 0:
+            action = start_action if start_action is not None else random_choice(env.nA, p=policy[state])
+        else:
+            # Sample action from action probability distribution
+            action = random_choice(env.action_space.n, p=policy[state])
+
+        # Apply the sampled action in our environment
+        state, reward, done, _ = env.step(action)
+
+        episode_reward += gamma**t * reward
+
+        # if beta != np.inf:
+        #     # Add the entropic cost!
+        #     episode_reward -= (1/beta) * np.log(policy[state,action]/prior_policy[state, action])
+        t += 1
+
