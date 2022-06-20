@@ -2,14 +2,14 @@
 Model-free algorithm, uses experience from (fixed) prior policy.
 Uses a neural network for function approximation of u and chi.
 """
-raise NotImplementedError
+# raise NotImplementedError
 import matplotlib.pyplot as plt
 import numpy as np
 from frozen_lake_env import ModifiedFrozenLake, MAPS
 from gym.wrappers import TimeLimit
 from utils import gather_experience, get_dynamics_and_rewards, printf, solve_unconstrained
 from visualization import make_animation, plot_dist
-
+from agents import NN_uchi
 # Assuming deterministic dynamics only for now:
 
 beta = 4
@@ -38,7 +38,7 @@ l_true, u_true, v_true, optimal_policy, optimal_dynamics, estimated_distribution
 from agents import MF_uchi
 results = dict(step=[], theta=[], kl=[])
 
-agent = MF_uchi(env, beta=beta, u_ref_state=(1,0), stochastic=False)
+agent = NN_uchi(env, beta=beta, u_ref_state=(1,0), stochastic=False)
 step = 0
 max_it = 50
 alpha_scale = 0.01
