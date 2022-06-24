@@ -1,6 +1,6 @@
 import numpy as np
 from copy import deepcopy
-from utils import chi
+from utils import chi_from_u
 
 
 class MF_uchi:
@@ -134,17 +134,19 @@ class NN_uchi:
         self.chi_ref_state, self.reference_reward, _, _ = self.env.step(action)
 
         self.init_u = np.ones((self.env.nS, self.env.nA)) 
-        self.init_chi = chi(self.init_u, self.env.nS, self.env.nA, self.prior_policy)
+        self.init_chi = chi_from_u(self.init_u, self.env.nS, self.env.nA, self.prior_policy)
         self.ref_chi = self.init_chi[self.chi_ref_state]
 
         # We will be updating log(u) and chi on each iteration
         self.logu = np.log(self.init_u)
-        self.chi = self.init_chi
+        # self.chi = self.init_chi
 
         self.network_setup()
 
-    def train(self, sarsa_experience, alpha, beta) -> np.ndarray:
+    def train(self, sarsa_experience, beta) -> None:
 
+        X_data, Y_data = [], []
+        X_chi_data, Y_chi_data = [], []
         for (state, action, reward, next_state, next_action), _ in sarsa_experience:
             loguold = self.logu
 
@@ -171,54 +173,64 @@ class NN_uchi:
                 self.logu[state,action] = sample_sum / num_samples
             
             # Learn logu update    
-            self.logu = loguold * (1 - alpha) + alpha * self.logu
-            self.logu -= self.logu[self.u_ref_state]
-                    # ft the model on the training dataset
+            # self.logu = loguold * (1 - alpha) + alpha * self.logu
+            # self.logu -= self.logu[self.u_ref_state]
+
             # let's do a one-hot encoding on the state-action pair
             x = np.zeros(self.env.nS*self.env.nA)
             x[state*self.env.nA + action] = 1
+            X_data.append(x)
             y=self.logu.flatten().reshape(196,)
-            print(y.shape)
+            Y_data.append(y)
             
-            self.logu_model.fit(x, y, epochs=1, batch_size=1, verbose=1)
+            # ch_true=chi_from_u(np.exp(self.logu), self.env.nS, self.env.nA, self.prior_policy)
+            # x_chi = np.zeros(self.env.nS)
+            # x_chi[state] = 1
+            # X_chi_data.append(x_chi)
+            # y_chi = ch_true.flatten().reshape(49,)
+            # Y_chi_data.append(y_chi)
 
-            ch_true=chi(np.exp(self.logu), self.env.nS, self.env.nA, self.prior_policy)
-            x_chi = np.zeros(self.env.nS)
-            x_chi[state] = 1
-            y_chi = ch_true.flatten().reshape(49,)
-            self.chi_model.fit(x_chi, y_chi, epochs=1, batch_size=1, verbose=1)
+        X_data = np.array(X_data).flatten().reshape(196,1604)
+        Y_data = np.array(Y_data)
+        # X_chi_data = np.array(X_chi_data)
+        # Y_chi_data = np.array(Y_chi_data)
 
-        return self.logu
+        self.logu_model.fit(X_data, Y_data, epochs=1, batch_size=1, verbose=1)
+
+        # self.chi_model.fit(X_chi_data, Y_chi_data, epochs=1, batch_size=1, verbose=1)
+
+        # return self.logu
+        return
 
     def network_setup(self):
-        # from sklearn.metrics import mean_squared_error
         from keras.models import Sequential
         from keras.layers import Dense
         # design the neural network model
         logu_model = Sequential()
         logu_model.add(Dense(196, input_shape=(1, ), activation='relu', kernel_initializer='he_uniform'))
         # logu_model.add(Dense(10, input_dim=self.env.nS, activation='relu', kernel_initializer='he_uniform'))
-        # logu_model.add(Dense(1, input_dim=self.env.nS*self.env.nA))
+        logu_model.add(Dense(1, input_dim=self.env.nS*self.env.nA))
         # define the loss function and optimization algorithm
         logu_model.compile(loss='mse', optimizer='adam')
         
         self.logu_model = logu_model
 
-        chi_model = Sequential()
-        chi_model.add(Dense(49, input_shape=(1,), activation='relu'))
-        chi_model.compile(loss='mse', optimizer='adam')
+        # chi_model = Sequential()
+        # chi_model.add(Dense(49, input_shape=(1,), activation='relu'))
+        # chi_model.compile(loss='mse', optimizer='adam')
         
-        self.chi_model = chi_model
+        # self.chi_model = chi_model
 
-    def network_predict_logu(self, S, A):
+    def network_predict_logu(self):
         
-        yhat = self.logu_model.predict(S*A)
-        # # inverse transforms
-        # x_plot = scale_x.inverse_transform(x)
-        # y_plot = scale_y.inverse_transform(y)
-        # yhat_plot = scale_y.inverse_transform(yhat)
-
+        yhat = self.logu_model.predict(np.ones(self.env.nS * self.env.nA))
+        # print(yhat.shape)
         return yhat
+
+    @property
+    def chi(self):
+        # return self.chi_model.predict(np.ones(self.env.nS))
+        return chi_from_u(np.exp(self.network_predict_logu()), self.env.nS, self.env.nA, self.prior_policy)
 
     @property
     def policy(self):

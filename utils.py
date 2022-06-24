@@ -440,7 +440,7 @@ def gather_experience(env, training_policy, batch_size, n_jobs=1):
 
 
 
-def chi(u, nS, nA, prior_policy=None):
+def chi_from_u(u, nS, nA, prior_policy=None):
     if prior_policy is None:
         prior_policy = np.ones((nS, nA)) / nA
 

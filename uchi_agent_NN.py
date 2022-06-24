@@ -2,7 +2,7 @@
 Model-free algorithm, uses experience from (fixed) prior policy.
 Uses a neural network for function approximation of u and chi.
 """
-# raise NotImplementedError
+raise NotImplementedError
 import matplotlib.pyplot as plt
 import numpy as np
 from frozen_lake_env import ModifiedFrozenLake, MAPS
@@ -40,16 +40,15 @@ results = dict(step=[], theta=[], kl=[])
 
 agent = NN_uchi(env, beta=beta, u_ref_state=(1,0), stochastic=False)
 step = 0
-max_it = 50
+max_it = 10
 alpha_scale = 0.01
 decay = 2e3
-batch_size = 50
+batch_size = 10
 for it in range(max_it):
     printf('Iteration', it, max_it)
-    alpha = 0.05#decay / (decay + step) * alpha_scale
 
     sarsa_experience = gather_experience(env, agent.prior_policy, batch_size=batch_size, n_jobs=4)
-    agent.train(sarsa_experience, alpha, beta)
+    agent.train(sarsa_experience, beta)
 
     kl = - (agent.policy * (np.log(agent.policy) - np.log(optimal_policy))).sum()
     theta = agent.theta
