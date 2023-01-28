@@ -95,8 +95,9 @@ class NNUChi(nn.Module):
         _, action = self.u_ref_state
         self.chi_ref_state, self.reference_reward, _, _ = self.env.step(action)
         self.ref_chi = 0.5  # ref_chi = self.init_chi[self.chi_ref_state]
-
         self.env.reset()
+        sa = np.array([0])
+        self.ref_sa = th.tensor(sa, dtype=th.float32, device=self.device)
 
     def logu_forward(self, x):
         x = F.relu(self.u1(x))
@@ -107,7 +108,7 @@ class NNUChi(nn.Module):
     def chi_forward(self, x):
         x = F.relu(self.chi1(x))
         x = F.relu(self.chi2(x))
-        x = F.sigmoid(self.chi3(x))
+        x = F.relu(self.chi3(x))
         return x
 
     def get_state_actions(self, x):
@@ -138,10 +139,10 @@ class NNUChi(nn.Module):
         u_s = u_sa.sum(dim=0)
         pi_sa = u_sa / u_s
         # Sample an action according to the distribution
-        # a = np.random.choice(self.action_dim, p=pi_sa.cpu().detach(
-        # ).numpy().flatten())
+        a = np.random.choice(
+            self.action_dim, p=pi_sa.cpu().detach().numpy().flatten())
         # Grab the action with the highest probability
-        a = th.argmax(pi_sa).item()
+        # a = th.argmax(pi_sa).item()
         return a
 
     def set_device(self, device):
@@ -161,33 +162,30 @@ class NNUChi(nn.Module):
         state_actions = th.tensor(
             state_actions, dtype=th.float32, device=self.device)
         rewards = th.tensor(rewards, dtype=th.float32, device=self.device)
-        next_states_tensor = th.tensor(
-            next_states, dtype=th.float32, device=self.device)
+        # next_states_tensor = th.tensor(
+        #     next_states, dtype=th.float32, device=self.device)
         logu_sa = self.logu_forward(state_actions)
         logu_sa_prime = self.logu_forward(sa_next_tensor)
-        chi_sp = self.chi_forward(next_states_tensor)
-
-        # logu_sa_prime = self.logu_forward(sa_next_tensor)
-        # with th.no_grad():
-
-        # get q for (s`,a`) assuming those are deterministic
-        # sa_next = th.tensor(sa_next, dtype=th.float32,
-        #                     device=self.device)
+        # chi_sp = self.chi_forward(next_states_tensor)
+        chi_sp = th.exp(logu_sa_prime).sum(dim=1, keepdim=True)
 
         delta_rewards = rewards - self.reference_reward
         target_logu_values = (
             self.beta * delta_rewards + th.log(chi_sp/self.ref_chi))
+        # target_logu_values = target_logu_values - \
+        #     self.logu_forward(self.ref_sa)
         # sum the exp logu values over actions
-        target_chi_values = th.exp(logu_sa_prime).sum(dim=0)
+
+        # target_chi_values = th.exp(logu_sa_prime).sum(dim=0)
 
         logu_loss = F.mse_loss(logu_sa, target_logu_values)
-        chi_loss = F.mse_loss(chi_sp, target_chi_values)
+        # chi_loss = F.mse_loss(chi_sp, target_chi_values)
         self.logu_optimizer.zero_grad()
-        self.chi_optimizer.zero_grad()
+        # self.chi_optimizer.zero_grad()
         logu_loss.backward(retain_graph=True)
-        chi_loss.backward()
+        # chi_loss.backward()
         self.logu_optimizer.step()
-        self.chi_optimizer.step()
+        # self.chi_optimizer.step()
 
     def learn(self, total_timesteps: int = 1_000_000, rollout_len: int = 1_000, batch_size: int = 10_000, epochs: int = 10):
         """

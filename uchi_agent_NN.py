@@ -43,7 +43,7 @@ l_true, u_true, v_true, optimal_policy, optimal_dynamics, estimated_distribution
 env_name = "FrozenLake-v1"
 env = gym.make(env_name, is_slippery=False)
 
-model = NNUChi(env, beta=beta, u_ref_state=(1, 0))
+model = NNUChi(env, beta=10, u_ref_state=(0, 0))
 
 with wandb.init(
     project="LogU-Chi",
