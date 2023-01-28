@@ -18,7 +18,7 @@ import gym
 beta = 4
 n_action = 4
 max_steps = 200
-desc = np.array(MAPS['7x7holes'], dtype='c')
+desc = np.array(MAPS['3x2uturn'], dtype='c')
 env_src = ModifiedFrozenLake(
     n_action=n_action, max_reward=-0, min_reward=-1,
     step_penalization=1, desc=desc, never_done=False, cyclic_mode=True,
@@ -26,7 +26,7 @@ env_src = ModifiedFrozenLake(
     # an integer. 0: deterministic dynamics. 1: stochastic dynamics.
     slippery=0,
 )
-# env = TimeLimit(env_src, max_episode_steps=max_steps)
+env = TimeLimit(env_src, max_episode_steps=max_steps)
 env = env_src
 # NT: No touch (only use for comparison to ground truth)
 dynamics_NT, rewards_NT = get_dynamics_and_rewards(env)
@@ -41,14 +41,14 @@ l_true, u_true, v_true, optimal_policy, optimal_dynamics, estimated_distribution
 # Must "wisely" choose a reference state to normalize u by.
 # results = dict(step=[], theta=[], kl=[])
 env_name = "FrozenLake-v1"
-env = gym.make(env_name, is_slippery=False)
+# env = gym.make(env_name, is_slippery=False)
 
 model = NNUChi(env, beta=10, u_ref_state=(0, 0))
 
 with wandb.init(
     project="LogU-Chi",
     config={
-        "env_name": "FrozenLake-v1",
+        "env_name": "3x2",
         "greedy": True,
     },
     sync_tensorboard=True

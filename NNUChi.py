@@ -7,7 +7,7 @@ import wandb
 
 
 class Buffer:
-    def __init__(self, n_samples, state_dim, action_dim, gamma=0.99):
+    def __init__(self, n_samples, state_dim, action_dim, gamma=1):
         self.n_samples = n_samples
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -70,14 +70,14 @@ class NNUChi(nn.Module):
         self.chi2 = nn.Linear(hidden_dim, hidden_dim)
         self.chi3 = nn.Linear(hidden_dim, 1)
 
-        self.alpha = 1e-3
+        self.alpha = 1e-2
         self.logu_optimizer = Adam(self.parameters(), lr=self.alpha)
         self.chi_optimizer = Adam(self.parameters(), lr=self.alpha)
 
         self.use_wandb = use_wandb
         self.device = None
         self.exploration = 0.9
-        self.exploration_decay = 0.99999
+        self.exploration_decay = 0.99995
 
         self.chi_ref_state = None
         self.u_ref_state = None
@@ -139,10 +139,10 @@ class NNUChi(nn.Module):
         u_s = u_sa.sum(dim=0)
         pi_sa = u_sa / u_s
         # Sample an action according to the distribution
-        a = np.random.choice(
-            self.action_dim, p=pi_sa.cpu().detach().numpy().flatten())
+        # a = np.random.choice(
+        #     self.action_dim, p=pi_sa.cpu().detach().numpy().flatten())
         # Grab the action with the highest probability
-        # a = th.argmax(pi_sa).item()
+        a = th.argmax(pi_sa).item()
         return a
 
     def set_device(self, device):
@@ -171,7 +171,7 @@ class NNUChi(nn.Module):
 
         delta_rewards = rewards - self.reference_reward
         target_logu_values = (
-            self.beta * delta_rewards + th.log(chi_sp/self.ref_chi))
+            self.beta * delta_rewards + th.log(chi_sp/self.ref_chi)) - 1
         # target_logu_values = target_logu_values - \
         #     self.logu_forward(self.ref_sa)
         # sum the exp logu values over actions
