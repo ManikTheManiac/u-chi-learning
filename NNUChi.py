@@ -63,16 +63,13 @@ class NNUChi(nn.Module):
         self.state_dim = env.observation_space.n
         self.action_dim = env.action_space.n
         self.hidden_dim = hidden_dim
+
         self.u1 = nn.Linear(self.state_dim + self.action_dim, hidden_dim)
         self.u2 = nn.Linear(hidden_dim, hidden_dim)
         self.u3 = nn.Linear(hidden_dim, 1)
-        self.chi1 = nn.Linear(self.state_dim, hidden_dim)
-        self.chi2 = nn.Linear(hidden_dim, hidden_dim)
-        self.chi3 = nn.Linear(hidden_dim, 1)
 
         self.alpha = 1e-2
         self.logu_optimizer = Adam(self.parameters(), lr=self.alpha)
-        self.chi_optimizer = Adam(self.parameters(), lr=self.alpha)
 
         self.use_wandb = use_wandb
         self.device = None
@@ -83,7 +80,7 @@ class NNUChi(nn.Module):
         self.u_ref_state = None
         self.reference_reward = None
         self.ref_chi = None
-        self._set_references(u_ref_state)
+        self._set_references(u_ref_state=u_ref_state)
 
     def _set_references(self, u_ref_state=None):
         if u_ref_state is None:
@@ -103,12 +100,6 @@ class NNUChi(nn.Module):
         x = F.relu(self.u1(x))
         x = F.relu(self.u2(x))
         x = F.tanh(self.u3(x))
-        return x
-
-    def chi_forward(self, x):
-        x = F.relu(self.chi1(x))
-        x = F.relu(self.chi2(x))
-        x = F.relu(self.chi3(x))
         return x
 
     def get_state_actions(self, x):
@@ -150,7 +141,6 @@ class NNUChi(nn.Module):
         self.to(device)
 
     def update(self, buffer, batch_size):
-        th.autograd.set_detect_anomaly(True)
 
         states, next_states, actions, rewards, dones = buffer.sample(
             batch_size)
@@ -174,18 +164,11 @@ class NNUChi(nn.Module):
             self.beta * delta_rewards + th.log(chi_sp/self.ref_chi)) - 1
         # target_logu_values = target_logu_values - \
         #     self.logu_forward(self.ref_sa)
-        # sum the exp logu values over actions
-
-        # target_chi_values = th.exp(logu_sa_prime).sum(dim=0)
 
         logu_loss = F.mse_loss(logu_sa, target_logu_values)
-        # chi_loss = F.mse_loss(chi_sp, target_chi_values)
         self.logu_optimizer.zero_grad()
-        # self.chi_optimizer.zero_grad()
-        logu_loss.backward(retain_graph=True)
-        # chi_loss.backward()
+        logu_loss.backward()
         self.logu_optimizer.step()
-        # self.chi_optimizer.step()
 
     def learn(self, total_timesteps: int = 1_000_000, rollout_len: int = 1_000, batch_size: int = 10_000, epochs: int = 10):
         """
