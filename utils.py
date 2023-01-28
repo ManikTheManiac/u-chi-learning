@@ -1,3 +1,5 @@
+# from joblib import Parallel, delayed
+import itertools
 import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix, lil_matrix
 
@@ -24,9 +26,10 @@ def get_dynamics_and_rewards(env):
 
     dynamics = csr_matrix((prb_lst, (row_lst, col_lst)), shape=shape)
     colsums = dynamics.sum(axis=0)
-    assert (colsums.round(12) == 1.).all(), f"{colsums.min()=}, {colsums.max()=}"
+    assert (colsums.round(12) == 1.).all(), f"{colsums.min()}, {colsums.max()}"
 
-    rewards = csr_matrix((rew_lst, (row_lst, col_lst)), shape=shape).sum(axis=0)
+    rewards = csr_matrix((rew_lst, (row_lst, col_lst)),
+                         shape=shape).sum(axis=0)
 
     return dynamics, rewards
 
@@ -34,18 +37,20 @@ def get_dynamics_and_rewards(env):
 def find_exploration_policy(dynamics, rewards, n_states, n_actions, beta=1, alpha=0.01, prior_policy=None, debug=False, max_it=20):
 
     rewards[:] = 0
-    prior_policy = np.matrix(np.ones((n_states, n_actions))) / n_actions if prior_policy is None else prior_policy
+    prior_policy = np.matrix(np.ones((n_states, n_actions))) / \
+        n_actions if prior_policy is None else prior_policy
     if debug:
         entropy_list = []
 
     for i in range(1, 1 + max_it):
-        u, v, optimal_policy, _, estimated_distribution, _ = solve_biased_unconstrained(beta, dynamics, rewards, prior_policy, bias_max_it=20)
-        
+        u, v, optimal_policy, _, estimated_distribution, _ = solve_biased_unconstrained(
+            beta, dynamics, rewards, prior_policy, bias_max_it=20)
+
         sa_dist = np.multiply(u, v.T)
         mask = sa_dist > 0
         r = rewards.copy()
         r[:] = 0.
-        r[mask] = - np.log(sa_dist[mask].tolist()[0]) /beta
+        r[mask] = - np.log(sa_dist[mask].tolist()[0]) / beta
         r = r - r.max()
         rewards = (1 - alpha) * rewards + alpha * r
 
@@ -54,10 +59,9 @@ def find_exploration_policy(dynamics, rewards, n_states, n_actions, beta=1, alph
             entropy = - np.multiply(x, np.log(x)).sum()
             entropy_list.append(entropy)
 
-            print(f"{i=}\t{alpha=:.3f}\t{entropy=: 10.4f}\t", end='')
+            # print(f"{i=}\t{alpha=:.3f}\t{entropy=: 10.4f}\t", end='')
 
     return optimal_policy
-
 
 
 def solve_unconstrained(beta, dynamics, rewards, prior_policy, eig_max_it=10000, tolerance=1e-8):
@@ -103,9 +107,11 @@ def solve_unconstrained(beta, dynamics, rewards, prior_policy, eig_max_it=10000,
 
         # computing errors for convergence estimation
         mask = np.logical_and(uk > 0, u > 0)
-        u_err = np.abs((np.log(uk[mask]) - np.log(u[mask]))).max() + np.logical_xor(uk <= 0, u <= 0).sum()
+        u_err = np.abs((np.log(uk[mask]) - np.log(u[mask]))
+                       ).max() + np.logical_xor(uk <= 0, u <= 0).sum()
         mask = np.logical_and(vk > 0, v > 0)
-        v_err = np.abs((np.log(vk[mask]) - np.log(v[mask]))).max() + np.logical_xor(vk <= 0, v <= 0).sum()
+        v_err = np.abs((np.log(vk[mask]) - np.log(v[mask]))
+                       ).max() + np.logical_xor(vk <= 0, v <= 0).sum()
 
         # update the eigenvectors
         u = uk
@@ -118,15 +124,15 @@ def solve_unconstrained(beta, dynamics, rewards, prior_policy, eig_max_it=10000,
             Mt = Mt * rescale
             M_scale *= rescale
 
-
         if u_err <= tolerance and v_err <= tolerance:
-        # if u_err <= tolerance:
+            # if u_err <= tolerance:
             l = lu / M_scale
-            print(f"{i: 8d}, {u.min()=:.4e}, {u.max()=:.4e}. {M_scale=:.4e}, {lu=:.4e}, {l=:.4e}, {u_err=:.4e}, {v_err=:.4e}")
+            # print(f"{i: 8d}, {u.min()=:.4e}, {u.max()=:.4e}. {M_scale=:.4e}, {lu=:.4e}, {l=:.4e}, {u_err=:.4e}, {v_err=:.4e}")
             break
     else:
         l = lu / M_scale
-        print(f"Did not converge: {i: 8d}, {u.min()=:.4e}, {u.max()=:.4e}. {M_scale=:.4e}, {lu=:.4e}, {l=:.4e}, {u_err=:.4e}, {v_err=:.4e}")
+        # : {i: 8d}, {u.min() = : .4e}, {u.max() = : .4e}. {M_scale = : .4e}, {lu = : .4e}, {l = : .4e}, {u_err = : .4e}, {v_err = : .4e}")
+        print(f"Did not converge")
 
     l = lu / M_scale
 
@@ -148,13 +154,14 @@ def solve_unconstrained(beta, dynamics, rewards, prior_policy, eig_max_it=10000,
     v = v / v.sum()
     u = u / u.dot(v)
 
-    estimated_distribution = np.array(np.multiply(u, v.T).reshape((nS, nA)).sum(axis=1)).flatten()
+    estimated_distribution = np.array(np.multiply(
+        u, v.T).reshape((nS, nA)).sum(axis=1)).flatten()
 
     return l, u, v, optimal_policy, optimal_dynamics, estimated_distribution
 
 
 def solve_unconstrained_v1(beta, dynamics, rewards, prior_policy, eig_max_it=10000, tolerance=1e-8):
-    
+
     scale = 1 / np.exp(beta * rewards.min())
 
     nS, nSnA = dynamics.shape
@@ -195,9 +202,11 @@ def solve_unconstrained_v1(beta, dynamics, rewards, prior_policy, eig_max_it=100
 
         # computing errors for convergence estimation
         mask = np.logical_and(uk > 0, u > 0)
-        u_err = np.abs((np.log(uk[mask]) - np.log(u[mask]))).max() + np.logical_xor(uk <= 0, u <= 0).sum()
+        u_err = np.abs((np.log(uk[mask]) - np.log(u[mask]))
+                       ).max() + np.logical_xor(uk <= 0, u <= 0).sum()
         mask = np.logical_and(vk > 0, v > 0)
-        v_err = np.abs((np.log(vk[mask]) - np.log(v[mask]))).max() + np.logical_xor(vk <= 0, v <= 0).sum()
+        v_err = np.abs((np.log(vk[mask]) - np.log(v[mask]))
+                       ).max() + np.logical_xor(vk <= 0, v <= 0).sum()
 
         # update the eigenvectors
         u = uk
@@ -215,11 +224,12 @@ def solve_unconstrained_v1(beta, dynamics, rewards, prior_policy, eig_max_it=100
 
         if u_err <= tolerance and v_err <= tolerance:
             l = lu
-            print(f"{i: 8d}, {u.min()=:.4e}, {u.max()=:.4e}. {lu=:.4e}, {l=:.4e}, {u_err=:.4e}, {v_err=:.4e}")
+            # print(f"{i: 8d}, {u.min()=:.4e}, {u.max()=:.4e}. {lu=:.4e}, {l=:.4e}, {u_err=:.4e}, {v_err=:.4e}")
             break
     else:
         l = lu
-        print(f"Did not converge: {i: 8d}, {u.min()=:.4e}, {u.max()=:.4e}. {lu=:.4e}, {l=:.4e}, {u_err=:.4e}, {v_err=:.4e}")
+        # : {i: 8d}, {u.min()=:.4e}, {u.max()=:.4e}. {lu=:.4e}, {l=:.4e}, {u_err=:.4e}, {v_err=:.4e}")
+        print(f"Did not converge")
 
     l = lu
 
@@ -241,7 +251,8 @@ def solve_unconstrained_v1(beta, dynamics, rewards, prior_policy, eig_max_it=100
     v = v / v.sum()
     u = u / u.dot(v)
 
-    estimated_distribution = np.array(np.multiply(u, v.T).reshape((nS, nA)).sum(axis=1)).flatten()
+    estimated_distribution = np.array(np.multiply(
+        u, v.T).reshape((nS, nA)).sum(axis=1)).flatten()
 
     return l, u, v, optimal_policy, optimal_dynamics, estimated_distribution
 
@@ -269,10 +280,12 @@ def solve_biased_unconstrained(beta, prior_dynamics, rewards, prior_policy=None,
     policy_list = []
     for i in range(1, bias_max_it+1):
 
-        l, u, v, optimal_policy, optimal_dynamics, estimated_distribution = solve_unconstrained(beta, biased_dynamics, biased_rewards, prior_policy, eig_max_it=eig_max_it)
+        l, u, v, optimal_policy, optimal_dynamics, estimated_distribution = solve_unconstrained(
+            beta, biased_dynamics, biased_rewards, prior_policy, eig_max_it=eig_max_it)
         policy_list.append(optimal_policy)
         if ground_truth_policy is not None:
-            error_policy = compute_max_kl_divergence(optimal_policy, ground_truth_policy, axis=1)
+            error_policy = compute_max_kl_divergence(
+                optimal_policy, ground_truth_policy, axis=1)
             error_policy_list.append(error_policy)
 
         x = target_dynamics.tocoo()
@@ -289,10 +302,10 @@ def solve_biased_unconstrained(beta, prior_dynamics, rewards, prior_policy=None,
             print(f'Solved in {i} iterations')
             break
 
-
         ratio = prior_dynamics.tocoo()
         mask = ratio.data > 0
-        ratio.data[mask] = np.array(target_dynamics[ratio.row, ratio.col]).flatten()[mask] / ratio.data[mask]
+        ratio.data[mask] = np.array(target_dynamics[ratio.row, ratio.col]).flatten()[
+            mask] / ratio.data[mask]
         ratio.data[~mask] = 0.
 
         chi = np.multiply(u.reshape((nS, nA)), prior_policy).sum(axis=1)
@@ -319,13 +332,14 @@ def solve_biased_unconstrained(beta, prior_dynamics, rewards, prior_policy=None,
         biased_inv = 1 / biased
         biased_inv[biased_inv == np.inf] = 1.
         mask = (biased > 0) & (elem.data > 0)
-        elem.data[mask] = np.log(elem.data[mask] * biased_inv[mask]) * elem.data[mask]
+        elem.data[mask] = np.log(
+            elem.data[mask] * biased_inv[mask]) * elem.data[mask]
         elem.data[~mask] = 0.
         rw_bias = elem.sum(axis=0) / beta
 
         biased_rewards = rewards + rw_bias
         reward_offset = - biased_rewards.max()
-        biased_rewards +=  reward_offset
+        biased_rewards += reward_offset
 
     if i == bias_max_it:
         print(f'Did not finish after {i} iterations')
@@ -374,11 +388,14 @@ def get_mdp_transition_matrix(transition_dynamics, policy):
 
     td_coo = transition_dynamics.tocoo()
 
-    rows = (td_coo.row.reshape((-1, 1)) * nA + np.array(list(range(nA)))).flatten()
-    cols = np.broadcast_to(td_coo.col.reshape((-1, 1)), (len(td_coo.col), nA)).flatten()
+    rows = (td_coo.row.reshape((-1, 1)) * nA +
+            np.array(list(range(nA)))).flatten()
+    cols = np.broadcast_to(td_coo.col.reshape((-1, 1)),
+                           (len(td_coo.col), nA)).flatten()
     data = np.broadcast_to(td_coo.data, (nA, len(td_coo.data))).T.flatten()
 
-    mdp_transition_matrix = csr_matrix((data, (rows ,cols)), shape=(nSnA, nSnA)).multiply(policy.reshape((-1, 1)))
+    mdp_transition_matrix = csr_matrix((data, (rows, cols)), shape=(
+        nSnA, nSnA)).multiply(policy.reshape((-1, 1)))
 
     return mdp_transition_matrix
 
@@ -398,7 +415,7 @@ def largest_eigs_dense(A, n_eigs=1):
     return eigvals[:n_eigs], eigvecs[:, :n_eigs]
 
 
-def printf(label, i, out_of = 0, add_1=True):
+def printf(label, i, out_of=0, add_1=True):
     if add_1:
         index = i + 1
     else:
@@ -411,10 +428,7 @@ def printf(label, i, out_of = 0, add_1=True):
         if i == out_of-1:
             print('\nFinished.')
     return
-    
 
-import itertools
-from joblib import Parallel, delayed
 
 def training_episode(env, training_policy):
     sarsa_experience = []
@@ -425,19 +439,22 @@ def training_episode(env, training_policy):
     while not done:
         next_state, reward, done, _ = env.step(action)
         next_action = np.random.choice(env.nA, p=training_policy[next_state])
-        sarsa_experience.append(((state, action, reward, next_state, next_action), done))
+        sarsa_experience.append(
+            ((state, action, reward, next_state, next_action), done))
         state, action = next_state, next_action
 
     return sarsa_experience
 
+
 def gather_experience(env, training_policy, batch_size, n_jobs=1):
     if n_jobs > 1:
-        split_experience = Parallel(n_jobs=n_jobs, backend='loky')(delayed(training_episode)(env, training_policy) for _ in range(batch_size))
+        split_experience = Parallel(n_jobs=n_jobs, backend='loky')(
+            delayed(training_episode)(env, training_policy) for _ in range(batch_size))
     elif n_jobs == 1:
-        split_experience = [training_episode(env, training_policy) for _ in range(batch_size)]
+        split_experience = [training_episode(
+            env, training_policy) for _ in range(batch_size)]
 
     return list(itertools.chain.from_iterable(split_experience))
-
 
 
 def chi_from_u(u, nS, nA, prior_policy=None):
