@@ -68,7 +68,7 @@ class NNUChi(nn.Module):
         self.u2 = nn.Linear(hidden_dim, hidden_dim)
         self.u3 = nn.Linear(hidden_dim, 1)
 
-        self.alpha = 1e-2
+        self.alpha = 1e-5
         self.logu_optimizer = Adam(self.parameters(), lr=self.alpha)
 
         self.use_wandb = use_wandb
@@ -93,8 +93,9 @@ class NNUChi(nn.Module):
         self.chi_ref_state, self.reference_reward, _, _ = self.env.step(action)
         self.ref_chi = 0.5  # ref_chi = self.init_chi[self.chi_ref_state]
         self.env.reset()
-        sa = np.array([0])
-        self.ref_sa = th.tensor(sa, dtype=th.float32, device=self.device)
+        self.ref_sa = th.tensor(np.array([0, 0]))
+        # sa_full = self.get_state_actions(np.array([0]))
+        # self.ref_sa = th.tensor(sa_full, dtype=th.float32, device=self.device)
 
     def logu_forward(self, x):
         x = F.relu(self.u1(x))
@@ -145,6 +146,7 @@ class NNUChi(nn.Module):
         states, next_states, actions, rewards, dones = buffer.sample(
             batch_size)
         state_actions = np.concatenate([states, actions], axis=1)
+        print('next states:', next_states.shape)
         sa_next = self.get_state_actions(next_states)
         sa_next_tensor = th.tensor(
             sa_next, dtype=th.float32, device=self.device)
@@ -152,18 +154,19 @@ class NNUChi(nn.Module):
         state_actions = th.tensor(
             state_actions, dtype=th.float32, device=self.device)
         rewards = th.tensor(rewards, dtype=th.float32, device=self.device)
-        # next_states_tensor = th.tensor(
-        #     next_states, dtype=th.float32, device=self.device)
         logu_sa = self.logu_forward(state_actions)
         logu_sa_prime = self.logu_forward(sa_next_tensor)
-        # chi_sp = self.chi_forward(next_states_tensor)
         chi_sp = th.exp(logu_sa_prime).sum(dim=1, keepdim=True)
 
         delta_rewards = rewards - self.reference_reward
+        # Make self.ref_sa of the shape (1000, 6) by copying it across all the rows?
+        # ref_sa = self.ref_sa.repeat((batch_size, 1))
+        # ref_value = self.logu_forward(ref_sa)
+        # print(ref_value)
+        # print(type(ref_value))
+        # print(ref_value.shape)
         target_logu_values = (
-            self.beta * delta_rewards + th.log(chi_sp/self.ref_chi)) - 1
-        # target_logu_values = target_logu_values - \
-        #     self.logu_forward(self.ref_sa)
+            self.beta * delta_rewards + th.log(chi_sp/self.ref_chi))  # / ref_value
 
         logu_loss = F.mse_loss(logu_sa, target_logu_values)
         self.logu_optimizer.zero_grad()
