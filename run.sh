@@ -23,7 +23,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib
 echo "Start Run"
 echo `date`
 # python uchi_agent_NN.py
-python uchi_agent_MB.py
+python uchi_agent_MF.py
 
 # Diagnostic/Logging Information
 echo "Finish Run"
