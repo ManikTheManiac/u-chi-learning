@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 from frozen_lake_env import ModifiedFrozenLake, MAPS
 from gym.wrappers import TimeLimit
-from utils import get_dynamics_and_rewards, printf, solve_unconstrained, solve_unconstrained_v1, get_mdp_transition_matrix
-from visualization import plot_dist
+from utils import chi, get_dynamics_and_rewards, printf, solve_unconstrained, solve_unconstrained_v1, get_mdp_transition_matrix
+from visualization import plot_dist, save_err_plot, save_policy_plot, save_thetas, save_u_plot
 
 # Assuming deterministic dynamics only for now:
 beta = 5
@@ -18,8 +18,9 @@ desc = np.array(MAPS['7x8wall'], dtype='c')
 env_src = ModifiedFrozenLake(
     n_action=n_action, max_reward=-0, min_reward=-1,
     step_penalization=1, desc=desc, never_done=False, cyclic_mode=True,
-     # between 0. and 1., a probability of staying at goal state
-    slippery=0, # an integer. 0: deterministic dynamics. 1: stochastic dynamics.
+    # between 0. and 1., a probability of staying at goal state
+    # an integer. 0: deterministic dynamics. 1: stochastic dynamics.
+    slippery=0,
 )
 env = TimeLimit(env_src, max_episode_steps=max_steps)
 
@@ -29,25 +30,23 @@ n_states, SA = dynamics.shape
 n_actions = int(SA / n_states)
 prior_policy = np.ones((n_states, n_actions)) / n_actions
 
-solution = solve_unconstrained(beta, dynamics, rewards, prior_policy, eig_max_it=1_000_000, tolerance=1e-12)
+solution = solve_unconstrained(
+    beta, dynamics, rewards, prior_policy, eig_max_it=1_000_000, tolerance=1e-12)
 l_true, u_true, v_true, optimal_policy, optimal_dynamics, estimated_distribution = solution
 rewards = (np.array(rewards)[0]).reshape(n_states, n_actions)
 
 # Must "wisely" choose a reference state to normalize u by.
-u_ref_state = (0,1)
-chi_ref_state = int(dynamics[u_ref_state]) # where does the reference state send you to?
+u_ref_state = (0, 1)
+# where does the reference state send you to?
+chi_ref_state = int(dynamics[u_ref_state])
 
 delta_rwds = rewards - rewards[u_ref_state]
 
 next_state = dynamics.A[u_ref_state]
 
-def chi(u):
-    u = u.reshape(n_states, n_actions)
-    return (prior_policy * u).sum(axis=1)
 
-
-init_u = np.ones((n_states,n_actions)) 
-init_chi = chi(init_u)
+init_u = np.ones((n_states, n_actions))
+init_chi = chi(init_u, n_states, n_actions, prior_policy=prior_policy)
 # init_u = u
 
 
@@ -67,67 +66,50 @@ errs = []
 
 for i in range(n_iteration):
     printf('Iteration', i, n_iteration)
-    loguold = logu # Set old logu to current logu (so we can learn and calculate error between the two)
+    # Set old logu to current logu (so we can learn and calculate error between the two)
+    loguold = logu
     # Loop over all state action pairs
     for state in range(n_states):
         for action in range(n_actions):
-            if (state,action) != u_ref_state:
+            if (state, action) != u_ref_state:
                 # Check which states will be transitioned to: (det. dynamics so only 1 possible next state)
 
-                state_prime = np.argwhere(dynamics.A.T[state*env.nA + action] == 1)[0][0]
+                state_prime = np.argwhere(
+                    dynamics.A.T[state*env.nA + action] == 1)[0][0]
 
                 # Update log(u) based on the u-chi relationship
-                logu[state,action] = (beta * delta_rwds[state,action] + np.log(ch[state_prime]/ch[chi_ref_state]) )
+                logu[state, action] = (
+                    beta * delta_rwds[state, action] + np.log(ch[state_prime]/ch[chi_ref_state]))
 
-
-        
-
-    # Learn logu update    
+    # Learn logu update
     logu = loguold * (1 - alpha) + alpha * logu
     logu -= logu[u_ref_state]
 
     # Update chi at each state-iteration (because it will change each time)
-    ch = chi(np.exp(logu))
+    ch = chi(np.exp(logu), n_states, n_actions, prior_policy=prior_policy)
 
     # Calculate error between old and new logu
     # chisa = np.array([np.log(ch)]*n_actions).T
     # errs.append(np.abs(logu - (delta_rwds + np.log(chisa))).sum())
-    
+
     errs.append(np.abs(logu.flatten() - np.log(u_true)).sum())
 
     # Track eigenvalue
     theta = - beta * rewards[u_ref_state] - np.log(ch[chi_ref_state])
     thetas.append(theta)
 
-# plt.figure()
-# plt.title("Dominant Eigenvalue")
-# plt.plot(thetas)
-# plt.show()
+save_err_plot(errs, 'MB')
+save_u_plot(env, logu, u_true, prior_policy=prior_policy, name='MB')
+save_thetas(thetas, l_true, name='MB')
 
-plt.figure()
-plt.title("logu Error")
-plt.plot(errs)
-plt.show()
+
+pi_learned = np.exp(logu)/np.exp(logu).sum(axis=1, keepdims=True)
 
 u_true = u_true.A
 u_true = u_true.reshape(env.nS, env.nA)
-plt.figure()
-plt.title("Learned vs. True Left Eigenvector")
-plt.plot(u_true.flatten(), label='True')
-u_est = np.exp(logu).flatten()
-# rescale
-u_est = u_est * (u_true.max() / u_est.max())
-plt.plot(u_est, label='Learned')
-plt.legend()
-plt.show()
+optimal_policy = u_true * prior_policy
+optimal_policy = optimal_policy / optimal_policy.sum(axis=1, keepdims=True)
+save_policy_plot(desc, pi_learned, optimal_policy, name='MB')
 
-pi_learned = np.exp(logu)/np.exp(logu).sum(axis=1, keepdims=True)
-pi_true = u_true/u_true.sum(axis=1, keepdims=True)
-plot_dist(env.desc, pi_learned, pi_true, titles=["Learned policy", "True policy"])
 print(l_true)
 print(np.exp(-np.mean(thetas[-10:])))
-plt.figure()
-plt.title('Learned vs. True Eigenvalue')
-plt.plot(thetas, label='Learned')
-plt.hlines(-np.log(l_true), 0, n_iteration, linestyles='dashed', label='True')
-plt.show()
