@@ -1,7 +1,15 @@
 # from joblib import Parallel, delayed
+from joblib import Parallel, delayed
 import itertools
 import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix, lil_matrix
+
+
+def chi(u, n_states, n_actions, prior_policy=None):
+    if prior_policy is None:
+        prior_policy = np.ones((n_states, n_actions)) / n_actions
+    u = u.reshape(n_states, n_actions)
+    return (prior_policy * u).sum(axis=1)
 
 
 def get_dynamics_and_rewards(env):
@@ -456,10 +464,3 @@ def gather_experience(env, training_policy, batch_size, n_jobs=1):
 
     return list(itertools.chain.from_iterable(split_experience))
 
-
-def chi_from_u(u, nS, nA, prior_policy=None):
-    if prior_policy is None:
-        prior_policy = np.ones((nS, nA)) / nA
-
-    u = u.reshape(nS, nA)
-    return (prior_policy * u).sum(axis=1)

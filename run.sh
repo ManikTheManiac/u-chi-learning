@@ -11,7 +11,7 @@
 #SBATCH --output=outfiles/%j.out
 ##SBATCH --partition=AMD6276
 
-#SBATCH --array=1-5
+##SBATCH --array=1-5
 echo "using scavenger"
 
 # Prepare conda:
@@ -22,8 +22,8 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib
 
 echo "Start Run"
 echo `date`
-# python BoundingValue/experiment.py --algo 'bound'
-python uchi_agent_NN.py
+# python uchi_agent_NN.py
+python uchi_agent_MB.py
 
 # Diagnostic/Logging Information
 echo "Finish Run"

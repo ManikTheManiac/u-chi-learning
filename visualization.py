@@ -7,16 +7,18 @@ import imageio
 
 def make_animation(desc, sequence, filename, fps=5, **kvargs):
     if os.path.exists(f'{filename}.mp4'):
-        print(f'animation video already available for {filename}... continuing')
+        print(
+            f'animation video already available for {filename}... continuing')
         return
-    tmpdir =  tempfile.gettempdir()
+    tmpdir = tempfile.gettempdir()
     files_list = []
     print('writing frames ...')
     for i, (paths_list, meta) in enumerate(sequence):
         ith_filename = f"{filename}_{i:05d}.png"
         filepath = os.path.join(tmpdir, ith_filename)
         kvargs.update(meta)
-        plot_dist(desc, *paths_list, filename=filepath, show_plot=False, **kvargs)
+        plot_dist(desc, *paths_list, filename=filepath,
+                  show_plot=False, **kvargs)
         plt.close()
         files_list.append(filepath)
 
@@ -38,7 +40,7 @@ def make_animation(desc, sequence, filename, fps=5, **kvargs):
         os.remove(ith_filepath)
 
 
-def plot_dist(desc, *paths_list, ncols=4, filename=None, titles=None, main_title=None, figsize=None, show_values=False, show_plot=True, symbols_in_color = True, symbol_size=180, dpi=300):
+def plot_dist(desc, *paths_list, ncols=4, filename=None, titles=None, main_title=None, figsize=None, show_values=False, show_plot=True, symbols_in_color=True, symbol_size=180, dpi=300):
     desc = np.asarray(desc, dtype='c')
 
     if len(paths_list) == 0:
@@ -76,7 +78,8 @@ def plot_dist(desc, *paths_list, ncols=4, filename=None, titles=None, main_title
             axi.set_title(title)
             axi.set(**set_kvargs)
         else:
-            draw_paths(desc, axi, paths, title, show_values, symbols_in_color, symbol_size)
+            draw_paths(desc, axi, paths, title, show_values,
+                       symbols_in_color, symbol_size)
 
     if main_title is not None:
         plt.suptitle(main_title)
@@ -89,7 +92,7 @@ def plot_dist(desc, *paths_list, ncols=4, filename=None, titles=None, main_title
         return plt.gcf()
 
 
-def draw_paths(desc, axi, paths, title=None, show_values=False, symbols_in_color = True, symbol_size=120):
+def draw_paths(desc, axi, paths, title=None, show_values=False, symbols_in_color=True, symbol_size=120):
     if paths is None:
         return
     nrow, ncol = desc.shape
@@ -111,11 +114,16 @@ def draw_paths(desc, axi, paths, title=None, show_values=False, symbols_in_color
     axi.imshow(out)
 
     # show symbols for some special states
-    axi.scatter(*np.argwhere(desc.T == b'S').T, color='#00CD00' if symbols_in_color else 'k', s=symbol_size, marker='o')
-    axi.scatter(*np.argwhere(desc.T == b'G').T, color='#E6CD00' if symbols_in_color else 'k', s=symbol_size, marker='*')
-    axi.scatter(*np.argwhere(desc.T == b'H').T, color='#E60000' if symbols_in_color else 'k', s=symbol_size, marker='X')
-    axi.scatter(*np.argwhere(desc.T == b'C').T, color='#FF8000' if symbols_in_color else 'k', s=symbol_size, marker='D')
-    axi.scatter(*np.argwhere(desc.T == b'N').T, color='#808080' if symbols_in_color else 'k', s=symbol_size, marker=6)
+    axi.scatter(*np.argwhere(desc.T == b'S').T,
+                color='#00CD00' if symbols_in_color else 'k', s=symbol_size, marker='o')
+    axi.scatter(*np.argwhere(desc.T == b'G').T,
+                color='#E6CD00' if symbols_in_color else 'k', s=symbol_size, marker='*')
+    axi.scatter(*np.argwhere(desc.T == b'H').T,
+                color='#E60000' if symbols_in_color else 'k', s=symbol_size, marker='X')
+    axi.scatter(*np.argwhere(desc.T == b'C').T,
+                color='#FF8000' if symbols_in_color else 'k', s=symbol_size, marker='D')
+    axi.scatter(*np.argwhere(desc.T == b'N').T,
+                color='#808080' if symbols_in_color else 'k', s=symbol_size, marker=6)
 
     if len(paths.shape) == 2 and paths.shape[0] == nsta:
         # looks like a policy, lets try to illustrate it with arrows
@@ -128,7 +136,8 @@ def draw_paths(desc, axi, paths, title=None, show_values=False, symbols_in_color
         elif nact in [4, 5]:
             direction = ['left', 'down', 'right', 'up', 'stay']
         elif nact in [8, 9]:
-            direction = ['left', 'down', 'right', 'up', 'stay', 'leftdown', 'downright', 'rightup', 'upleft']
+            direction = ['left', 'down', 'right', 'up', 'stay',
+                         'leftdown', 'downright', 'rightup', 'upleft']
         else:
             raise NotImplementedError
 
@@ -155,15 +164,16 @@ def draw_paths(desc, axi, paths, title=None, show_values=False, symbols_in_color
                     d_x, d_y = -prob / np.sqrt(2), -prob / np.sqrt(2)
                 if desc[state // ncol, state % ncol] not in [b'W', b'G', b'H']:
                     axi.arrow(state % ncol, state // ncol, d_x*0.4, d_y*0.4,
-                             width=0.001, head_width=0.2*prob, head_length=0.2*prob,
-                             fc='k', ec='k')
+                              width=0.001, head_width=0.2*prob, head_length=0.2*prob,
+                              fc='k', ec='k')
 
     elif paths.shape == desc.shape and show_values:
         for i, row in enumerate(paths):
             for j, value in enumerate(row):
                 # if desc[state // ncol, state % ncol] not in [b'W', b'G']:
                 if value != 0:
-                    axi.text(j-0.4, i-0.15, f"{value:.2f}", c='k', fontsize=10.)
+                    axi.text(j-0.4, i-0.15,
+                             f"{value:.2f}", c='k', fontsize=10.)
 
     elif paths.shape == (2, nrow, ncol):
         # this is the signature for a force field. Let's plot this with arrows
@@ -173,7 +183,8 @@ def draw_paths(desc, axi, paths, title=None, show_values=False, symbols_in_color
         for row in range(nrow):
             for col in range(ncol):
                 size = paths[1, row, col]
-                axi.arrow(col, row, dx[row, col], dy[row, col], width=0.001, head_width=0.15*size, head_length=0.15*size, fc='k', ec='k')
+                axi.arrow(col, row, dx[row, col], dy[row, col], width=0.001,
+                          head_width=0.15*size, head_length=0.15*size, fc='k', ec='k')
 
     if title is not None:
         axi.set_title(title)
@@ -192,3 +203,61 @@ def add_layout(desc, out):
     out[walls] = [0, 0, 0]
 
     return out
+
+
+def save_u_plot(env, logu, u_true, prior_policy=None, name=''):
+    if prior_policy is None:
+        prior_policy = np.ones((env.nS, env.nA)) / env.nA
+
+    u_true = u_true.A
+    u_true = u_true.reshape(env.nS, env.nA)
+    optimal_policy = u_true * prior_policy
+    optimal_policy = optimal_policy / optimal_policy.sum(axis=1, keepdims=True)
+    plt.figure()
+    plt.title("Learned vs. True Left Eigenvector")
+    plt.plot(u_true.flatten(), label='True')
+    u_est = np.exp(logu).flatten()
+    # rescale
+    u_est = u_est * (u_true.max() / u_est.max())
+    plt.plot(u_est, label='Learned')
+    plt.legend()
+    plt.savefig(f'figures/left_eigenvector_{name}.png')
+    plt.close()
+
+    return optimal_policy
+
+
+def save_thetas(thetas, l_true, name: str = ''):
+    plt.figure()
+    plt.title('Learned vs. True Eigenvalue')
+    plt.plot(thetas, label='Learned')
+    max_it = len(thetas)
+    plt.hlines(-np.log(l_true), 0, max_it, linestyles='dashed', label='True')
+    plt.legend()
+    plt.savefig(f'figures/eigenvalue_{name}.png')
+    plt.close()
+
+
+def save_err_plot(err, name=''):
+    plt.figure()
+    plt.title("Policy Error")
+    plt.plot(err)
+    plt.savefig(f'figures/policy_error_{name}.png')
+    plt.close()
+
+def save_policy_plot(desc, learned_policy, optimal_policy, name=''):
+    plot_dist(desc, learned_policy, optimal_policy,
+              titles=["Learned policy", "True policy"],
+              filename=f'figures/policy_{name}.png')
+
+
+def save_plots(agent, results, u_true, l_true, name: str = ''):
+
+    save_err_plot(results['kl'], name=name)
+
+    optimal_policy = save_u_plot(
+        agent.env, agent.logu, u_true, prior_policy=agent.prior_policy, name=name)
+
+    save_thetas(results['theta'], l_true, name=name)
+    save_policy_plot(agent.env.desc, agent.policy, optimal_policy, name=name)
+
