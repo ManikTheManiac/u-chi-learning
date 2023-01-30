@@ -41,7 +41,7 @@ results = dict(step=[], theta=[], kl=[])
 
 agent = MF_uchi(env, beta=beta, u_ref_state=(1, 0), stochastic=False)
 step = 0
-max_it = 20
+max_it = 2000
 # alpha_scale = 0.01
 # decay = 2e3
 batch_size = 100
