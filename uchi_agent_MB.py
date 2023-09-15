@@ -14,7 +14,7 @@ from visualization import plot_dist, save_err_plot, save_policy_plot, save_theta
 beta = 5
 n_action = 4
 max_steps = 200
-desc = np.array(MAPS['7x8wall'], dtype='c')
+desc = np.array(MAPS['4x4'], dtype='c')
 env_src = ModifiedFrozenLake(
     n_action=n_action, max_reward=-0, min_reward=-1,
     step_penalization=1, desc=desc, never_done=False, cyclic_mode=True,
@@ -113,3 +113,5 @@ save_policy_plot(desc, pi_learned, optimal_policy, name='MB')
 
 print(l_true)
 print(np.exp(-np.mean(thetas[-10:])))
+print('theta:', -np.log(l_true)/beta)
+print(u_true)
