@@ -143,7 +143,7 @@ class LogULearner:
         self.ref_action = None
         self.ref_state = None
         self.ref_reward = None
-        self.theta = 0
+        self.theta = 1
         # self.replay_buffer = ReplayBuffer(buffer_size)
         
         # Set up the logger:
@@ -191,11 +191,15 @@ class LogULearner:
                 target_next_logu = self.target_logu(next_states)
                 next_logu = target_next_logu.gather(1, next_actions.long())
                 next_chi = self.target_logu.get_chi(next_logu)
-                new_theta = torch.mean(rewards - 1/self.beta * (curr_logu - torch.log(next_chi)))
+                # new_theta = torch.mean(rewards - 1/self.beta * (curr_logu - torch.log(next_chi)))
+                # new_theta = -torch.mean(rewards + next_logu - curr_logu)
+                new_theta = self.ref_reward - torch.log(ref_chi)
+                # new_theta = torch.Tensor([0.9791321771142604]).to(self.device)
+
+                expected_curr_logu = self.beta * (rewards + self.theta) + \
+                      (1 - dones) * next_logu#next_chi)# / ref_chi)
                 self.theta = (1 - self.tau_theta)*self.theta + self.tau_theta*new_theta
 
-                expected_curr_logu = self.beta * (rewards - self.ref_reward) + \
-                      (1 - dones) * torch.log(next_chi / ref_chi)
                 
             self.logger.record("theta", self.theta.item())
             self.logger.record("avg logu", curr_logu.mean().item())
@@ -237,6 +241,8 @@ class LogULearner:
 
                 torch_state = torch.FloatTensor(state).to(self.device)
                 action = self.online_logu.choose_action(torch_state)
+                # take a random action:
+                # action = self.env.action_space.sample()
                 next_state, reward, done, _ = self.env.step(action)
                 reward -= 1
                 if self.env_steps == 0:
@@ -245,16 +251,17 @@ class LogULearner:
                     self.ref_next_state = next_state
                 # reward -= 200
                 # reward /= 200
-                if self.replay_buffer.size() > self.batch_size: # or learning_starts?
-                    # Begin learning:
-                    self.learn()
-                    if self.env_steps % self.target_update_interval == 0:
-                        # Do a Polyak update of parameters:
-                        # for target_param, online_param in zip(self.target_logu.parameters(), self.online_logu.parameters()):
-                            # target_param.data.copy_(0.05 * target_param.data + 0.95 * online_param.data)
-                        self.target_logu.load_state_dict(self.online_logu.state_dict())
-                
-    
+                if self.env_steps % 30 == 0:
+                    if self.replay_buffer.size() > self.batch_size: # or learning_starts?
+                        # Begin learning:
+                        self.learn()
+                        if self.env_steps % self.target_update_interval == 0:
+                            # Do a Polyak update of parameters:
+                            # for target_param, online_param in zip(self.target_logu.parameters(), self.online_logu.parameters()):
+                                # target_param.data.copy_(0.05 * target_param.data + 0.95 * online_param.data)
+                            self.target_logu.load_state_dict(self.online_logu.state_dict())
+                    
+        
                 self.env_steps += 1
                 next_action = self.online_logu.choose_action(next_state)
                 episode_reward += reward
@@ -324,10 +331,10 @@ def main():
         slippery=0,
     )
     env = TimeLimit(env_src, max_episode_steps=max_steps)
-    agent = LogULearner(env, beta=5, learning_rate=1e-2, batch_size=200, buffer_size=10000, 
-                        target_update_interval=1000, device='cuda', gradient_steps=1, tau_theta=0.01, 
+    agent = LogULearner(env, beta=5, learning_rate=1e-3, batch_size=800, buffer_size=10000, 
+                        target_update_interval=1500, device='cpu', gradient_steps=3, tau_theta=0.001, 
                         log_interval=100)
-    agent.learn_online(2000)
+    agent.learn_online(50_000)
     print(f'Theta: {agent.theta}')
     print(agent._evec_values)
     pi = agent._evec_values.reshape((16,4))
