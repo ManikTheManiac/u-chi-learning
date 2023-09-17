@@ -96,7 +96,7 @@ class LogUNet(nn.Module):
             logu = self.forward(state)
 
             if greedy:
-                raise NotImplementedError("Greedy not implemented (possible bug?).")
+                # raise NotImplementedError("Greedy not implemented (possible bug?).")
                 a = logu.argmax()
                 return a.item()
 
@@ -143,7 +143,7 @@ class LogULearner:
         self.ref_action = None
         self.ref_state = None
         self.ref_reward = None
-        self.theta = 1
+        self.theta = 0
         # self.replay_buffer = ReplayBuffer(buffer_size)
         
         # Set up the logger:
@@ -198,6 +198,7 @@ class LogULearner:
 
                 expected_curr_logu = self.beta * (rewards + self.theta) + \
                       (1 - dones) * next_logu#next_chi)# / ref_chi)
+                # self.theta = torch.clamp(new_theta, 0, 1)
                 self.theta = (1 - self.tau_theta)*self.theta + self.tau_theta*new_theta
 
                 
@@ -244,7 +245,7 @@ class LogULearner:
                 # take a random action:
                 # action = self.env.action_space.sample()
                 next_state, reward, done, _ = self.env.step(action)
-                reward -= 1
+                # reward -= 1
                 if self.env_steps == 0:
                     self.ref_action = action
                     self.ref_reward = reward
@@ -281,12 +282,16 @@ class LogULearner:
     def evaluate(self, n_episodes=20):
         # run the current policy and return the average reward
         avg_reward = 0.
-        for _ in range(n_episodes):
+        for ep in range(n_episodes):
             state = self.env.reset()
             done = False
             while not done:
-                action = self.online_logu.choose_action(state)
+                action = self.online_logu.choose_action(state, greedy=True)
+                if ep == 0:
+                    self.env.render()
+
                 next_state, reward, done, _ = self.env.step(action)
+
                 avg_reward += reward
                 state = next_state
         avg_reward /= n_episodes
@@ -305,36 +310,33 @@ class LogULearner:
                     with torch.no_grad():
                         logu_ = self.online_logu(s_dev).cpu().squeeze(0)
                         logu[s,a] = logu_[a].numpy()
-                    # logu[s,a] = self.online_logu(s).squeeze(0).detach().cpu().numpy()[a]
-                
         else:
             raise NotImplementedError("Can only provide left e.v. for discrete state spaces.")
-
         return np.exp(logu)
 
 def main():
     desc = generate_random_map(size=4)
     env = gym.make('FrozenLake-v1', is_slippery=0)#, desc=desc)
     # env = get_environment('Pendulum', nbins=5, max_episode_steps=200)
-    # env = gym.make('CartPole-v1')
+    env = gym.make('CartPole-v1')
     # env = gym.make('MountainCar-v0')
-    from gym.wrappers import TimeLimit
-    env = gym.make('FrozenLake-v1', is_slippery=False)#, desc=desc)
-    n_action = 4
-    max_steps = 200
-    desc = np.array(MAPS['4x4'], dtype='c')
-    env_src = ModifiedFrozenLake(
-        n_action=n_action, max_reward=1, min_reward=0,
-        step_penalization=0, desc=desc, never_done=False, cyclic_mode=True,
-        # between 0. and 1., a probability of staying at goal state
-        # an integer. 0: deterministic dynamics. 1: stochastic dynamics.
-        slippery=0,
-    )
-    env = TimeLimit(env_src, max_episode_steps=max_steps)
-    agent = LogULearner(env, beta=5, learning_rate=1e-3, batch_size=800, buffer_size=10000, 
-                        target_update_interval=1500, device='cpu', gradient_steps=3, tau_theta=0.001, 
-                        log_interval=100)
-    agent.learn_online(50_000)
+    # from gym.wrappers import TimeLimit
+    # env = gym.make('FrozenLake-v1', is_slippery=False)#, desc=desc)
+    # n_action = 4
+    # max_steps = 200
+    # desc = np.array(MAPS['3x5uturn'], dtype='c')
+    # env_src = ModifiedFrozenLake(
+    #     n_action=n_action, max_reward=1, min_reward=0,
+    #     step_penalization=0, desc=desc, never_done=False, cyclic_mode=True,
+    #     # between 0. and 1., a probability of staying at goal state
+    #     # an integer. 0: deterministic dynamics. 1: stochastic dynamics.
+    #     slippery=0,
+    # )
+    # env = TimeLimit(env_src, max_episode_steps=max_steps)
+    agent = LogULearner(env, beta=10, learning_rate=1e-3, batch_size=800, buffer_size=10000, 
+                        target_update_interval=3000, device='cpu', gradient_steps=6, tau_theta=1e-4,#0.001, 
+                        log_interval=1500)
+    agent.learn_online(5000_000)
     print(f'Theta: {agent.theta}')
     print(agent._evec_values)
     pi = agent._evec_values.reshape((16,4))

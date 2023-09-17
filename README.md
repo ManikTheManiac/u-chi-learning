@@ -1,5 +1,11 @@
 U-chi learning implementation in gym mazes
 
+# TODOs:
+- [ ] Make more off-policy / offline?
+- [ ] UV learning
+- [ ] Rawlik scheme
+- [ ] More stable theta required
+
 
 gym version: ?
 

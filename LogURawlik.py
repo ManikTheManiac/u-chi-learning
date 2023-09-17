@@ -52,7 +52,7 @@ class Memory(object):
 
 
 class LogUNet(nn.Module):
-    def __init__(self, env, device='cuda', hidden_dim=64):
+    def __init__(self, env, device='cuda', hidden_dim=128):
         super(LogUNet, self).__init__()
         self.env = env
         self.device = device
@@ -112,6 +112,7 @@ class LogUNet(nn.Module):
         return a.item()
 
 
+
 class LogULearner:
     def __init__(self, 
                  env,
@@ -140,16 +141,25 @@ class LogULearner:
         self.save_checkpoints = save_checkpoints
         self.log_interval = log_interval
         self.tau_theta = tau_theta
-        
+        self.prior = None
+        self.next_prior = None
+
         self.replay_buffer = Memory(buffer_size, device=device)
         self.ref_action = None
         self.ref_state = None
+        self.ref_reward = None
         self.theta = 0
         # self.replay_buffer = ReplayBuffer(buffer_size)
         
         # Set up the logger:
+        # first get environment name:
+        try:
+            env_name = self.env.unwrapped.spec.id
+        except:
+            env_name = ''
+    
         name = str(len(os.listdir('tmp/uchi'))) if run_name == '' else run_name
-        tmp_path = "tmp/uchi/run_" + name
+        tmp_path = f"tmp/uchi/{env_name}run_{name}"
         os.makedirs(tmp_path, exist_ok=True)
         self.logger = configure(tmp_path, ["stdout", "csv", "tensorboard"])
 
@@ -172,30 +182,37 @@ class LogULearner:
         for grad_step in range(self.gradient_steps):
             replay = self.replay_buffer.sample(self.batch_size, continuous=False)
             states, next_states, actions, next_actions, rewards, dones = replay
-
+            # rewards -= 400
+            # rewards /= 400
             actions = actions.unsqueeze(1)
             next_actions = next_actions.unsqueeze(1)
             rewards = rewards.unsqueeze(1)
             dones = dones.unsqueeze(1)
 
-            curr_logu =self.online_logu(states)
+            curr_logu = self.online_logu(states)
             curr_logu = curr_logu.squeeze(1)#self.online_logu(states).squeeze(1)
             curr_logu = curr_logu.gather(1, actions.long())
             # next_chi = self.target_logu.get_chi(self.target_logu(next_states).gather(1, next_actions.long()))
             with torch.no_grad():
-                target_logu = self.target_logu(states)
-                target_a = torch.exp(target_logu) / torch.sum(torch.exp(target_logu), dim=1, keepdim=True)
+                ref_action = torch.from_numpy(np.array(self.ref_action, dtype=np.float32)).to(self.device).unsqueeze(0)
+                ref_clogu = self.online_logu(self.ref_state).squeeze(0)[self.ref_action]#.gather(1, ref_action.long())
+
+                ref_logu = self.target_logu(self.ref_next_state)
+                ref_chi = self.target_logu.get_chi(ref_logu)
+
                 target_next_logu = self.target_logu(next_states)
                 next_logu = target_next_logu.gather(1, next_actions.long())
+                next_chi = self.target_logu.get_chi(next_logu)
+                # new_theta = torch.mean(rewards - 1/self.beta * (curr_logu - torch.log(next_chi)))
+                # new_theta = -torch.mean(rewards + next_logu - curr_logu)
+                new_theta = self.ref_reward - torch.log(ref_chi)
+                # new_theta = torch.Tensor([0.9791321771142604]).to(self.device)
 
-                ref_logu = self.target_logu(self.ref_state)
-                ref_chi = self.target_logu.get_chi(ref_logu, prior_a=target_a)
-
-                next_chi = self.target_logu.get_chi(next_logu, prior_a=target_a)
-                new_theta = torch.mean(rewards - 1/self.beta * (curr_logu - torch.log(next_chi)))
+                expected_curr_logu = self.beta * (rewards + self.theta) + \
+                      (1 - dones) * next_logu#next_chi)# / ref_chi)
+                # self.theta = torch.clamp(new_theta, 0, 1)
                 self.theta = (1 - self.tau_theta)*self.theta + self.tau_theta*new_theta
 
-                expected_curr_logu = self.beta * (rewards - self.theta) + (1 - dones) * torch.log(next_chi / ref_chi)
                 
             self.logger.record("theta", self.theta.item())
             self.logger.record("avg logu", curr_logu.mean().item())
@@ -208,7 +225,7 @@ class LogULearner:
             
             # Clip gradient norm
             loss.backward()
-            # torch.nn.utils.clip_grad_norm_(self.online_logu.parameters(), 1.0)
+            # torch.nn.utils.clip_grad_norm_(self.online_logu.parameters(), 10)
 
             # Log the average gradient:
             with torch.no_grad():
@@ -236,28 +253,35 @@ class LogULearner:
                     state = np.array([state])
 
                 torch_state = torch.FloatTensor(state).to(self.device)
-                with torch.no_grad():
-                    prior = torch.exp(self.target_logu(torch_state))
-                    prior = prior / torch.sum(prior)
-                action = self.online_logu.choose_action(torch_state, prior_a=prior)
+                action = self.online_logu.choose_action(torch_state, prior_a=self.prior)
+                # take a random action:
+                # action = self.env.action_space.sample()
+                next_state, reward, done, _ = self.env.step(action)
+                # reward -= 1
                 if self.env_steps == 0:
                     self.ref_action = action
-                next_state, reward, done, _ = self.env.step(action)
-                reward -= 1
-                # reward -= 200
-                # reward /= 200
-                if self.replay_buffer.size() > self.batch_size: # or learning_starts?
-                    # Begin learning:
-                    self.learn()
-                    if self.env_steps % self.target_update_interval == 0:
-                        # Do a Polyak update of parameters:
-                        # for target_param, online_param in zip(self.target_logu.parameters(), self.online_logu.parameters()):
-                            # target_param.data.copy_(0.05 * target_param.data + 0.95 * online_param.data)
-                        self.target_logu.load_state_dict(self.online_logu.state_dict())
-                
-    
+                    self.ref_reward = reward
+                    self.ref_next_state = next_state
+                if self.env_steps % 30 == 0:
+                    if self.replay_buffer.size() > self.batch_size: # or learning_starts?
+                        # Begin learning:
+                        self.learn()
+                if self.env_steps % self.target_update_interval == 0:
+                    # Do a Polyak update of parameters:
+                    # for target_param, online_param in zip(self.target_logu.parameters(), self.online_logu.parameters()):
+                        # target_param.data.copy_(0.05 * target_param.data + 0.95 * online_param.data)
+                    self.target_logu.load_state_dict(self.online_logu.state_dict())
+                    # Update pi_0:
+                    next_target_logu = self.target_logu(next_state)
+                    next_target_logu = next_target_logu.squeeze(0)
+                    self.next_prior = torch.exp(next_target_logu) / torch.sum(torch.exp(next_target_logu))
+                    target_logu = self.target_logu(state)
+                    target_logu = target_logu.squeeze(0)
+                    self.prior = torch.exp(target_logu) / torch.sum(torch.exp(target_logu))
+
+                    
                 self.env_steps += 1
-                next_action = self.online_logu.choose_action(next_state)
+                next_action = self.online_logu.choose_action(next_state, prior_a=self.next_prior)
                 episode_reward += reward
                 self.replay_buffer.add((state, next_state, action, next_action, reward, done))
                 state = next_state
@@ -268,6 +292,9 @@ class LogULearner:
                         torch.save(self.online_logu.state_dict(), 'sql-policy.para')
                     self.logger.record("Env. steps:", self.env_steps)
                     self.logger.record("Eval. reward:", self.evaluate())
+                    # Log policy entropy:
+                    # policy_entropy = / chi
+                    # self.logger.record("Policy entropy:", policy_entropy)
                     self.logger.record("Beta:", self.beta)
                     self.logger.dump(step=self.env_steps)
 
@@ -275,12 +302,20 @@ class LogULearner:
     def evaluate(self, n_episodes=20):
         # run the current policy and return the average reward
         avg_reward = 0.
-        for _ in range(n_episodes):
+        for ep in range(n_episodes):
             state = self.env.reset()
             done = False
             while not done:
-                action = self.online_logu.choose_action(state)
+                # use target net to get prior:
+                prior = self.target_logu(state)
+                prior = prior.squeeze(0)
+                prior = torch.exp(prior) / torch.sum(torch.exp(prior))
+                action = self.online_logu.choose_action(state, prior_a=prior)
+                # if ep == 0:
+                #     self.env.render()
+
                 next_state, reward, done, _ = self.env.step(action)
+
                 avg_reward += reward
                 state = next_state
         avg_reward /= n_episodes
@@ -294,38 +329,38 @@ class LogULearner:
             nA = self.env.action_space.n
             logu = np.zeros((nS, nA))
             for s in range(nS):
+                s_dev = torch.FloatTensor([s]).to(self.device)
                 for a in range(nA):
-                    logu[s,a] = self.online_logu(torch.FloatTensor([s])).squeeze(0)[a].item()
-                
+                    with torch.no_grad():
+                        logu_ = self.online_logu(s_dev).cpu().squeeze(0)
+                        logu[s,a] = logu_[a].numpy()
         else:
             raise NotImplementedError("Can only provide left e.v. for discrete state spaces.")
-
         return np.exp(logu)
 
 def main():
-    desc = generate_random_map(size=6)
-    env = gym.make('FrozenLake-v1', is_slippery=0)#, desc=desc)
+    desc = generate_random_map(size=4)
+    # env = gym.make('FrozenLake-v1', is_slippery=0)#, desc=desc)
     # env = get_environment('Pendulum', nbins=5, max_episode_steps=200)
-    # env = gym.make('CartPole-v1')
+    env = gym.make('CartPole-v1')
     # env = gym.make('MountainCar-v0')
     # from gym.wrappers import TimeLimit
     # env = gym.make('FrozenLake-v1', is_slippery=False)#, desc=desc)
     # n_action = 4
-    # max_steps = 20
-    # desc = np.array(MAPS['4x4'], dtype='c')
+    # max_steps = 200
+    # desc = np.array(MAPS['3x5uturn'], dtype='c')
     # env_src = ModifiedFrozenLake(
     #     n_action=n_action, max_reward=1, min_reward=0,
-    #     step_penalization=0, desc=desc, never_done=True, cyclic_mode=True,
+    #     step_penalization=0, desc=desc, never_done=False, cyclic_mode=True,
     #     # between 0. and 1., a probability of staying at goal state
     #     # an integer. 0: deterministic dynamics. 1: stochastic dynamics.
     #     slippery=0,
     # )
     # env = TimeLimit(env_src, max_episode_steps=max_steps)
-    agent = LogULearner(env, beta=10, learning_rate=2e-3, batch_size=100, buffer_size=10000, 
-                        target_update_interval=1000, device='cpu', gradient_steps=1, tau_theta=0.001, log_interval=100)
+    agent = LogULearner(env, beta=10, learning_rate=1e-5, batch_size=128, buffer_size=100000, 
+                        target_update_interval=6000, device='cpu', gradient_steps=4, tau_theta=1e-4,#0.001, 
+                        log_interval=2500)
     agent.learn_online(5000_000)
-    print(f'Theta: {agent.theta}')
-    print(agent._evec_values)
 
 
 if __name__ == '__main__':
