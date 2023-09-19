@@ -13,6 +13,7 @@ import os
 from torch.nn import functional as F
 from frozen_lake_env import MAPS, ModifiedFrozenLake, generate_random_map
 from visualization import plot_dist
+from stable_baselines3.common.utils import polyak_update
 
 
 class Memory(object):
@@ -118,14 +119,18 @@ class LogULearner:
                  batch_size,
                  buffer_size,
                  target_update_interval,
+                 tau,
+                 hidden_dim=64,
                  tau_theta=0.001,
                  gradient_steps=1,
-                 device='cpu',
+                 device='cuda',
                  run_name='',
                  log_interval=1000,
                  save_checkpoints = False,
                  ) -> None:
         self.env = env
+        # make another instance for evaluation purposes only:
+        self.eval_env = env
         self._vec_normalize_env = unwrap_vec_normalize(env)
         self.beta = beta
         self.learning_rate = learning_rate
@@ -133,6 +138,8 @@ class LogULearner:
         self.buffer_size = buffer_size
         self.batch_size = batch_size
         self.target_update_interval = target_update_interval
+        self.tau = tau
+        self.hidden_dim = hidden_dim
         self.gradient_steps = gradient_steps
         self.device = device
         self.save_checkpoints = save_checkpoints
@@ -143,7 +150,8 @@ class LogULearner:
         self.ref_action = None
         self.ref_state = None
         self.ref_reward = None
-        self.theta = 0
+        self.theta = -1
+        self.eval_auc = 0
         # self.replay_buffer = ReplayBuffer(buffer_size)
         
         # Set up the logger:
@@ -158,8 +166,8 @@ class LogULearner:
 
     def _initialize_networks(self):
 
-        self.online_logu = LogUNet(self.env, device=self.device)
-        self.target_logu = LogUNet(self.env, device=self.device)
+        self.online_logu = LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
+        self.target_logu = LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
         self.target_logu.load_state_dict(self.online_logu.state_dict())
 
         # Make LogU learnable:
@@ -192,9 +200,9 @@ class LogULearner:
                 next_logu = target_next_logu.gather(1, next_actions.long())
                 next_chi = self.target_logu.get_chi(next_logu)
                 # new_theta = torch.mean(rewards - 1/self.beta * (curr_logu - torch.log(next_chi)))
-                # new_theta = -torch.mean(rewards + next_logu - curr_logu)
+                # new_theta = torch.mean(rewards - torch.log(next_chi))
                 new_theta = self.ref_reward - torch.log(ref_chi)
-                # new_theta = torch.Tensor([0.9791321771142604]).to(self.device)
+                # new_theta = torch.Tensor([-0.9975]).to(self.device) #9791321771142604
 
                 expected_curr_logu = self.beta * (rewards + self.theta) + \
                       (1 - dones) * next_logu#next_chi)# / ref_chi)
@@ -227,8 +235,8 @@ class LogULearner:
             self.logger.record("avg_grad", np.mean(ps))
             self.optimizer.step()
     
-    def learn_online(self, max_timesteps):
-        while self.env_steps < max_timesteps:
+    def learn_online(self, total_timesteps):
+        while self.env_steps < total_timesteps:
         # interact with the environment, episodically:
             state = self.env.reset()
             if self.env_steps == 0:
@@ -245,23 +253,20 @@ class LogULearner:
                 # take a random action:
                 # action = self.env.action_space.sample()
                 next_state, reward, done, _ = self.env.step(action)
-                # reward -= 1
+
                 if self.env_steps == 0:
                     self.ref_action = action
                     self.ref_reward = reward
                     self.ref_next_state = next_state
-                # reward -= 200
-                # reward /= 200
+
                 if self.env_steps % 30 == 0:
                     if self.replay_buffer.size() > self.batch_size: # or learning_starts?
                         # Begin learning:
                         self.learn()
                         if self.env_steps % self.target_update_interval == 0:
                             # Do a Polyak update of parameters:
-                            # for target_param, online_param in zip(self.target_logu.parameters(), self.online_logu.parameters()):
-                                # target_param.data.copy_(0.05 * target_param.data + 0.95 * online_param.data)
-                            self.target_logu.load_state_dict(self.online_logu.state_dict())
-                    
+                            polyak_update(self.online_logu.parameters(), self.target_logu.parameters(), self.tau)
+
         
                 self.env_steps += 1
                 next_action = self.online_logu.choose_action(next_state)
@@ -271,10 +276,13 @@ class LogULearner:
 
         
                 if self.env_steps % self.log_interval == 0:
+                    avg_eval_rwd = self.evaluate()
+                    self.eval_auc += avg_eval_rwd
                     if self.save_checkpoints:
                         torch.save(self.online_logu.state_dict(), 'sql-policy.para')
                     self.logger.record("Env. steps:", self.env_steps)
-                    self.logger.record("Eval. reward:", self.evaluate())
+                    self.logger.record("Eval. reward:", avg_eval_rwd)
+                    self.logger.record("eval_auc", self.eval_auc)
                     self.logger.record("Beta:", self.beta)
                     self.logger.dump(step=self.env_steps)
 
@@ -283,19 +291,19 @@ class LogULearner:
         # run the current policy and return the average reward
         avg_reward = 0.
         for ep in range(n_episodes):
-            state = self.env.reset()
+            state = self.eval_env.reset()
             done = False
             while not done:
                 action = self.online_logu.choose_action(state, greedy=True)
-                if ep == 0:
-                    self.env.render()
+                # if ep == 0:
+                    # self.env.render()
 
-                next_state, reward, done, _ = self.env.step(action)
+                next_state, reward, done, _ = self.eval_env.step(action)
 
                 avg_reward += reward
                 state = next_state
         avg_reward /= n_episodes
-        self.env.close()
+        self.eval_env.close()
         return avg_reward
     
     @property
@@ -333,8 +341,8 @@ def main():
     #     slippery=0,
     # )
     # env = TimeLimit(env_src, max_episode_steps=max_steps)
-    agent = LogULearner(env, beta=10, learning_rate=1e-3, batch_size=800, buffer_size=10000, 
-                        target_update_interval=3000, device='cpu', gradient_steps=6, tau_theta=1e-4,#0.001, 
+    agent = LogULearner(env, beta=5, learning_rate=4e-3, batch_size=1200, buffer_size=100000, 
+                        target_update_interval=3000, device='cuda', gradient_steps=4, tau_theta=1e-6, tau=1,#0.001, 
                         log_interval=1500)
     agent.learn_online(5000_000)
     print(f'Theta: {agent.theta}')

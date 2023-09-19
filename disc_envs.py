@@ -81,6 +81,7 @@ class DiscretizeAction(ActionWrapper):
         high = env.action_space.high
         self.action_mapping = np.linspace(low, high, nbins)
         self.action_space = spaces.Discrete(nbins ** self.ndim_actions)
+        self.id = 'Discretized'
     
     def action(self, action):
         
