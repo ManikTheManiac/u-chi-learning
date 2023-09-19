@@ -263,9 +263,9 @@ class LogULearner:
                     if self.replay_buffer.size() > self.batch_size: # or learning_starts?
                         # Begin learning:
                         self.learn()
-                        if self.env_steps % self.target_update_interval == 0:
-                            # Do a Polyak update of parameters:
-                            polyak_update(self.online_logu.parameters(), self.target_logu.parameters(), self.tau)
+                if self.env_steps % self.target_update_interval == 0:
+                    # Do a Polyak update of parameters:
+                    polyak_update(self.online_logu.parameters(), self.target_logu.parameters(), self.tau)
 
         
                 self.env_steps += 1
@@ -287,7 +287,7 @@ class LogULearner:
                     self.logger.dump(step=self.env_steps)
 
 
-    def evaluate(self, n_episodes=20):
+    def evaluate(self, n_episodes=5):
         # run the current policy and return the average reward
         avg_reward = 0.
         for ep in range(n_episodes):
@@ -327,7 +327,7 @@ def main():
     env = gym.make('FrozenLake-v1', is_slippery=0)#, desc=desc)
     # env = get_environment('Pendulum', nbins=5, max_episode_steps=200)
     env = gym.make('CartPole-v1')
-    # env = gym.make('MountainCar-v0')
+    env = gym.make('MountainCar-v0')
     # from gym.wrappers import TimeLimit
     # env = gym.make('FrozenLake-v1', is_slippery=False)#, desc=desc)
     # n_action = 4
