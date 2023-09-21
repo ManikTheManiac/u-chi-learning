@@ -1,15 +1,27 @@
-U-chi learning implementation in gym mazes
+LogU learning implementation in gym (mazes and cartpole)
+
+# New Features:
+- [ ] Monitor FPS
+
+# Experimental questions:
+- [ ] Does stabilizing theta help stabilize logu? (i.e. fix theta to g.t.)
+
+# Features requiring experiments:
+- [ ] use target or online logu for exploration (greedy or not?)
+- [ ] Standard prioritized replay
+- [ ] Clipping theta
+- [ ] smooth out theta learning
 
 # TODOs:
+- [ ] Generate dependencies
+- [ ] Write tests
 - [ ] Make more off-policy / offline?
+- [ ] V learning with cloning
 - [ ] UV learning
 - [ ] Rawlik scheme
-- [ ] More stable theta required
 
 
-gym version: ?
-
-Model-based ground truth comparisons:
+Model-based ground truth comparisons with tabular algorithms:
 
 ![eigvec](figures/left_eigenvector_MB.png)
 ![policy](figures/policy_MB.png)
