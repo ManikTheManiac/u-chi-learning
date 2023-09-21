@@ -43,7 +43,7 @@ if __name__ == "__main__":
     # Parse the "algo" argument
     parser = argparse.ArgumentParser()
     parser.add_argument("-hd", "--hidden_dim", type=int, default=256)
-    parser.add_argument("-c", "--count", type=int, default=500)
+    parser.add_argument("-c", "--count", type=int, default=100)
     
     args = parser.parse_args()
 

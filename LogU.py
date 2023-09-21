@@ -14,6 +14,7 @@ from torch.nn import functional as F
 from frozen_lake_env import MAPS, ModifiedFrozenLake, generate_random_map
 from visualization import plot_dist
 from stable_baselines3.common.utils import polyak_update
+from gym.wrappers import TimeLimit
 
 
 class Memory(object):
@@ -123,8 +124,9 @@ class LogULearner:
                  hidden_dim=64,
                  tau_theta=0.001,
                  gradient_steps=1,
-                 device='cuda',
+                 device='cpu',
                  run_name='',
+                 log_dir=None,
                  log_interval=1000,
                  save_checkpoints = False,
                  ) -> None:
@@ -150,13 +152,16 @@ class LogULearner:
         self.ref_action = None
         self.ref_state = None
         self.ref_reward = None
-        self.theta = -1
+        self.theta = torch.Tensor([-1]).to(self.device)
         self.eval_auc = 0
         # self.replay_buffer = ReplayBuffer(buffer_size)
         
         # Set up the logger:
-        name = str(len(os.listdir('tmp/uchi'))) if run_name == '' else run_name
-        tmp_path = "tmp/uchi/run_" + name
+        if log_dir is None:
+            name = str(len(os.listdir('tmp/uchi'))) if run_name == '' else run_name
+            tmp_path = "tmp/uchi/run_" + name
+        else:
+            tmp_path = log_dir
         os.makedirs(tmp_path, exist_ok=True)
         self.logger = configure(tmp_path, ["stdout", "csv", "tensorboard"])
 
@@ -249,6 +254,7 @@ class LogULearner:
                     state = np.array([state])
 
                 torch_state = torch.FloatTensor(state).to(self.device)
+                # if action is None:
                 action = self.online_logu.choose_action(torch_state)
                 # take a random action:
                 # action = self.env.action_space.sample()
@@ -259,7 +265,8 @@ class LogULearner:
                     self.ref_reward = reward
                     self.ref_next_state = next_state
 
-                if self.env_steps % 30 == 0:
+                # if self.env_steps % 30 == 0: # should this be changed to only learn after done = True?
+                if done:
                     if self.replay_buffer.size() > self.batch_size: # or learning_starts?
                         # Begin learning:
                         self.learn()
@@ -273,7 +280,7 @@ class LogULearner:
                 episode_reward += reward
                 self.replay_buffer.add((state, next_state, action, next_action, reward, done))
                 state = next_state
-
+                # action = next_action
         
                 if self.env_steps % self.log_interval == 0:
                     avg_eval_rwd = self.evaluate()
@@ -286,10 +293,15 @@ class LogULearner:
                     self.logger.record("Beta:", self.beta)
                     self.logger.dump(step=self.env_steps)
 
+                # if done:
+                #     print("solved in rollout!")
 
-    def evaluate(self, n_episodes=5):
+
+    def evaluate(self, n_episodes=1):
         # run the current policy and return the average reward
         avg_reward = 0.
+        # Wrap a timelimit:
+        # self.eval_env = TimeLimit(self.eval_env, max_episode_steps=500)
         for ep in range(n_episodes):
             state = self.eval_env.reset()
             done = False
@@ -302,6 +314,7 @@ class LogULearner:
 
                 avg_reward += reward
                 state = next_state
+                # print(reward)
         avg_reward /= n_episodes
         self.eval_env.close()
         return avg_reward
@@ -327,8 +340,10 @@ def main():
     env = gym.make('FrozenLake-v1', is_slippery=0)#, desc=desc)
     # env = get_environment('Pendulum', nbins=5, max_episode_steps=200)
     env = gym.make('CartPole-v1')
-    env = gym.make('MountainCar-v0')
-    # from gym.wrappers import TimeLimit
+    # env = gym.make('MountainCar-v0')
+    # use a 500 timestep limit:
+
+    # env = TimeLimit(env.env, max_episode_steps=500)
     # env = gym.make('FrozenLake-v1', is_slippery=False)#, desc=desc)
     # n_action = 4
     # max_steps = 200
@@ -341,9 +356,9 @@ def main():
     #     slippery=0,
     # )
     # env = TimeLimit(env_src, max_episode_steps=max_steps)
-    agent = LogULearner(env, beta=5, learning_rate=4e-3, batch_size=1200, buffer_size=100000, 
-                        target_update_interval=3000, device='cuda', gradient_steps=4, tau_theta=1e-6, tau=1,#0.001, 
-                        log_interval=1500)
+    agent = LogULearner(env.env, beta=3.8, learning_rate=4e-3, batch_size=450, buffer_size=200000, 
+                        target_update_interval=6000, device='cpu', gradient_steps=7, tau_theta=0.0000413, tau=0.88,#0.001, 
+                        log_interval=1000, hidden_dim=256)
     agent.learn_online(5000_000)
     print(f'Theta: {agent.theta}')
     print(agent._evec_values)
