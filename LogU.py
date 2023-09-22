@@ -152,7 +152,7 @@ class LogULearner:
         self.ref_action = None
         self.ref_state = None
         self.ref_reward = None
-        self.theta = torch.Tensor([-1]).to(self.device)
+        self.theta = torch.Tensor([1]).to(self.device)
         self.eval_auc = 0
         # self.replay_buffer = ReplayBuffer(buffer_size)
         
@@ -193,20 +193,20 @@ class LogULearner:
             curr_logu = self.online_logu(states)
             curr_logu = curr_logu.squeeze(1)#self.online_logu(states).squeeze(1)
             curr_logu = curr_logu.gather(1, actions.long())
-            # next_chi = self.target_logu.get_chi(self.target_logu(next_states).gather(1, next_actions.long()))
-            with torch.no_grad():
-                ref_action = torch.from_numpy(np.array(self.ref_action, dtype=np.float32)).to(self.device).unsqueeze(0)
-                ref_clogu = self.online_logu(self.ref_state).squeeze(0)[self.ref_action]#.gather(1, ref_action.long())
 
-                ref_logu = self.target_logu(self.ref_next_state)
-                ref_chi = self.target_logu.get_chi(ref_logu)
+            ref_logu = self.target_logu(self.ref_next_state)
+            ref_chi = self.target_logu.get_chi(ref_logu)
+            new_theta = self.ref_reward - torch.log(ref_chi)
+
+            with torch.no_grad():
+                # ref_action = torch.from_numpy(np.array(self.ref_action, dtype=np.float32)).to(self.device).unsqueeze(0)
+                # ref_clogu = self.online_logu(self.ref_state).squeeze(0)[self.ref_action]#.gather(1, ref_action.long())
 
                 target_next_logu = self.target_logu(next_states)
                 next_logu = target_next_logu.gather(1, next_actions.long())
                 next_chi = self.target_logu.get_chi(next_logu)
                 # new_theta = torch.mean(rewards - 1/self.beta * (curr_logu - torch.log(next_chi)))
                 # new_theta = torch.mean(rewards - torch.log(next_chi))
-                new_theta = self.ref_reward - torch.log(ref_chi)
                 # new_theta = torch.Tensor([-0.9975]).to(self.device) #9791321771142604
 
                 expected_curr_logu = self.beta * (rewards + self.theta) + \
@@ -339,11 +339,11 @@ def main():
     desc = generate_random_map(size=4)
     env = gym.make('FrozenLake-v1', is_slippery=0)#, desc=desc)
     # env = get_environment('Pendulum', nbins=5, max_episode_steps=200)
-    env = gym.make('CartPole-v1')
-    # env = gym.make('MountainCar-v0')
+    # env = gym.make('CartPole-v1')
+    env = gym.make('MountainCar-v0')
     # use a 500 timestep limit:
 
-    # env = TimeLimit(env.env, max_episode_steps=500)
+    env = TimeLimit(env.env, max_episode_steps=500)
     # env = gym.make('FrozenLake-v1', is_slippery=False)#, desc=desc)
     # n_action = 4
     # max_steps = 200
@@ -356,9 +356,9 @@ def main():
     #     slippery=0,
     # )
     # env = TimeLimit(env_src, max_episode_steps=max_steps)
-    agent = LogULearner(env.env, beta=3.8, learning_rate=4e-3, batch_size=450, buffer_size=200000, 
+    agent = LogULearner(env, beta=3.8, learning_rate=4e-3, batch_size=450, buffer_size=200000, 
                         target_update_interval=6000, device='cpu', gradient_steps=7, tau_theta=0.0000413, tau=0.88,#0.001, 
-                        log_interval=1000, hidden_dim=256)
+                        log_interval=100, hidden_dim=256)
     agent.learn_online(5000_000)
     print(f'Theta: {agent.theta}')
     print(agent._evec_values)

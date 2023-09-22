@@ -24,7 +24,7 @@ def runner(config=None, run=None):
 
     model = LogULearner(env, **config, log_interval=500)
 
-    model.learn_online(total_timesteps=50_000)
+    model.learn_online(total_timesteps=150_000)
 
 
 def wandb_agent():
@@ -39,7 +39,7 @@ def wandb_agent():
 if __name__ == "__main__":
     entity = "jacobhadamczyk"
     project = "LogU-Cartpole"
-    sweep_id = "4elv2eke"
+    sweep_id = "0ly148kl"
     # Parse the "algo" argument
     parser = argparse.ArgumentParser()
     parser.add_argument("-hd", "--hidden_dim", type=int, default=256)
