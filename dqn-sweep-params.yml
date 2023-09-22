@@ -1,0 +1,47 @@
+method: bayes
+metric:
+  goal: maximize
+  name: eval_auc
+parameters:
+  batch_size:
+    distribution: uniform
+    max: 3000
+    min: 10
+  exploration_final_eps:
+    distribution: uniform
+    max: 0.3
+    min: 0.01
+  exploration_fraction:
+    distribution: uniform
+    max: 0.5
+    min: 0.01
+  gamma:
+    distribution: uniform
+    max: 0.99
+    min: 0.9
+  buffer_size:
+    distribution: log_uniform_values
+    max: 120000
+    min: 10000
+  gradient_steps:
+    distribution: uniform
+    max: 200
+    min: 1
+  learning_starts:
+    distribution: uniform
+    max: 10000
+    min: 0
+  learning_rate:
+    distribution: log_uniform_values
+    max: 0.1
+    min: 0.0005
+  target_update_interval:
+    distribution: uniform
+    max: 1500
+    min: 5
+  tau:
+    distribution: uniform
+    max: 1
+    min: 0.5
+
+program: wandb_job.py
