@@ -157,13 +157,15 @@ class LogULearner:
         # self.replay_buffer = ReplayBuffer(buffer_size)
         
         # Set up the logger:
-        if log_dir is None:
-            name = str(len(os.listdir('tmp/uchi'))) if run_name == '' else run_name
-            tmp_path = "tmp/uchi/run_" + name
+        if log_dir is not None:
+            run_name = str(len(os.listdir(log_dir)))
+            tmp_path = f"{log_dir}_{run_name}"
+        
+            os.makedirs(tmp_path, exist_ok=True)
+            self.logger = configure(tmp_path, ["stdout", "csv", "tensorboard"])
         else:
-            tmp_path = log_dir
-        os.makedirs(tmp_path, exist_ok=True)
-        self.logger = configure(tmp_path, ["stdout", "csv", "tensorboard"])
+            # print the logs to stdout:
+            self.logger = configure(format_strings=["stdout", "csv", "tensorboard"])
 
         self._n_updates = 0
         self.env_steps = 0
@@ -181,6 +183,7 @@ class LogULearner:
 
     def learn(self,):
         # replay = self.replay_buffer.sample(self.batch_size, env=self._vec_normalize_env)
+        new_thetas = []
         for grad_step in range(self.gradient_steps):
             replay = self.replay_buffer.sample(self.batch_size, continuous=False)
             states, next_states, actions, next_actions, rewards, dones = replay
@@ -197,6 +200,7 @@ class LogULearner:
             ref_logu = self.target_logu(self.ref_next_state)
             ref_chi = self.target_logu.get_chi(ref_logu)
             new_theta = self.ref_reward - torch.log(ref_chi)
+            new_thetas.append(new_theta)
             # average self.theta over multiple gradient steps
 
             with torch.no_grad():
@@ -213,7 +217,7 @@ class LogULearner:
                 expected_curr_logu = self.beta * (rewards + self.theta) + \
                       (1 - dones) * next_logu#next_chi)# / ref_chi)
                 # self.theta = torch.clamp(new_theta, 0, 1)
-                self.theta = (1 - self.tau_theta)*self.theta + self.tau_theta*new_theta
+                # self.theta = self.tau_theta*self.theta + (1 - self.tau_theta) * new_theta
 
                 
             self.logger.record("theta", self.theta.item())
@@ -241,6 +245,9 @@ class LogULearner:
 
             self.logger.record("avg_grad", np.mean(ps))
             self.optimizer.step()
+        # self.theta = torch.mean(torch.stack(new_thetas))
+        self.theta = self.tau_theta*self.theta + (1 - self.tau_theta) * torch.mean(torch.stack(new_thetas))
+
     
     def learn_online(self, total_timesteps):
         while self.env_steps < total_timesteps:
@@ -359,7 +366,7 @@ def main():
     # env = TimeLimit(env_src, max_episode_steps=max_steps)
     env_id = 'CartPole-v1'
     agent = LogULearner(env_id, beta=4, learning_rate=3e-2, batch_size=1500, buffer_size=45000, 
-                        target_update_interval=150, device='cuda', gradient_steps=40, tau_theta=0.0001, tau=0.75,#0.001, 
+                        target_update_interval=150, device='cuda', gradient_steps=40, tau_theta=0.99, tau=0.75,#0.001, 
                         log_interval=1000, hidden_dim=256)
     agent.learn_online(50_000)
     # print(f'Theta: {agent.theta}')
