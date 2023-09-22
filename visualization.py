@@ -2,7 +2,7 @@ import os
 import tempfile
 import numpy as np
 import matplotlib.pyplot as plt
-import imageio
+# import imageio
 
 
 def make_animation(desc, sequence, filename, fps=5, **kvargs):
@@ -245,6 +245,7 @@ def save_err_plot(err, name=''):
     plt.savefig(f'figures/policy_error_{name}.png')
     plt.close()
 
+
 def save_policy_plot(desc, learned_policy, optimal_policy, name=''):
     plot_dist(desc, learned_policy, optimal_policy,
               titles=["Learned policy", "True policy"],
@@ -260,4 +261,3 @@ def save_plots(agent, results, u_true, l_true, name: str = ''):
 
     save_thetas(results['theta'], l_true, name=name)
     save_policy_plot(agent.env.desc, agent.policy, optimal_policy, name=name)
-
