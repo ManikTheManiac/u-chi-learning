@@ -114,7 +114,7 @@ class LogUNet(nn.Module):
 
 class LogULearner:
     def __init__(self, 
-                 env,
+                 env_id,
                  beta,
                  learning_rate,
                  batch_size,
@@ -130,10 +130,10 @@ class LogULearner:
                  log_interval=1000,
                  save_checkpoints = False,
                  ) -> None:
-        self.env = env
+        self.env = gym.make(env_id)
         # make another instance for evaluation purposes only:
-        self.eval_env = env
-        self._vec_normalize_env = unwrap_vec_normalize(env)
+        self.eval_env = gym.make(env_id)
+        # self._vec_normalize_env = unwrap_vec_normalize(self.env)
         self.beta = beta
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -152,7 +152,7 @@ class LogULearner:
         self.ref_action = None
         self.ref_state = None
         self.ref_reward = None
-        self.theta = torch.Tensor([1]).to(self.device)
+        self.theta = torch.Tensor([-1]).to(self.device)
         self.eval_auc = 0
         # self.replay_buffer = ReplayBuffer(buffer_size)
         
@@ -197,6 +197,7 @@ class LogULearner:
             ref_logu = self.target_logu(self.ref_next_state)
             ref_chi = self.target_logu.get_chi(ref_logu)
             new_theta = self.ref_reward - torch.log(ref_chi)
+            # average self.theta over multiple gradient steps
 
             with torch.no_grad():
                 # ref_action = torch.from_numpy(np.array(self.ref_action, dtype=np.float32)).to(self.device).unsqueeze(0)
@@ -229,6 +230,7 @@ class LogULearner:
             # torch.nn.utils.clip_grad_norm_(self.online_logu.parameters(), 10)
 
             # Log the average gradient:
+            # TODO: put this in a parallel process somehow or use dot prods?
             with torch.no_grad():
                 ps = []
                 for p in self.online_logu.parameters():
@@ -270,6 +272,8 @@ class LogULearner:
                     if self.replay_buffer.size() > self.batch_size: # or learning_starts?
                         # Begin learning:
                         self.learn()
+                        self.env.reset()
+
                 if self.env_steps % self.target_update_interval == 0:
                     # Do a Polyak update of parameters:
                     polyak_update(self.online_logu.parameters(), self.target_logu.parameters(), self.tau)
@@ -293,11 +297,8 @@ class LogULearner:
                     self.logger.record("Beta:", self.beta)
                     self.logger.dump(step=self.env_steps)
 
-                # if done:
-                #     print("solved in rollout!")
 
-
-    def evaluate(self, n_episodes=1):
+    def evaluate(self, n_episodes=10):
         # run the current policy and return the average reward
         avg_reward = 0.
         # Wrap a timelimit:
@@ -339,11 +340,11 @@ def main():
     desc = generate_random_map(size=4)
     env = gym.make('FrozenLake-v1', is_slippery=0)#, desc=desc)
     # env = get_environment('Pendulum', nbins=5, max_episode_steps=200)
-    # env = gym.make('CartPole-v1')
-    env = gym.make('MountainCar-v0')
+    env = gym.make('CartPole-v1')
+    # env = gym.make('MountainCar-v0')
     # use a 500 timestep limit:
 
-    env = TimeLimit(env.env, max_episode_steps=500)
+    # env = TimeLimit(env.env, max_episode_steps=500)
     # env = gym.make('FrozenLake-v1', is_slippery=False)#, desc=desc)
     # n_action = 4
     # max_steps = 200
@@ -356,16 +357,17 @@ def main():
     #     slippery=0,
     # )
     # env = TimeLimit(env_src, max_episode_steps=max_steps)
-    agent = LogULearner(env, beta=3.8, learning_rate=4e-3, batch_size=450, buffer_size=200000, 
-                        target_update_interval=6000, device='cpu', gradient_steps=7, tau_theta=0.0000413, tau=0.88,#0.001, 
-                        log_interval=100, hidden_dim=256)
-    agent.learn_online(5000_000)
-    print(f'Theta: {agent.theta}')
-    print(agent._evec_values)
-    pi = agent._evec_values.reshape((16,4))
-    pi /= np.sum(pi, axis=1, keepdims=True)
-    desc = np.array(desc, dtype='c')
-    plot_dist(desc, pi, titles=['LogU'], filename='logu.png')
+    env_id = 'CartPole-v1'
+    agent = LogULearner(env_id, beta=4, learning_rate=3e-2, batch_size=1500, buffer_size=45000, 
+                        target_update_interval=150, device='cuda', gradient_steps=40, tau_theta=0.0001, tau=0.75,#0.001, 
+                        log_interval=1000, hidden_dim=256)
+    agent.learn_online(50_000)
+    # print(f'Theta: {agent.theta}')
+    # print(agent._evec_values)
+    # pi = agent._evec_values.reshape((16,4))
+    # pi /= np.sum(pi, axis=1, keepdims=True)
+    # desc = np.array(desc, dtype='c')
+    # plot_dist(desc, pi, titles=['LogU'], filename='logu.png')
 
 
 if __name__ == '__main__':
