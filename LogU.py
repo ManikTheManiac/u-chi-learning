@@ -197,13 +197,14 @@ class LogULearner:
             curr_logu = curr_logu.squeeze(1)#self.online_logu(states).squeeze(1)
             curr_logu = curr_logu.gather(1, actions.long())
 
-            ref_logu = self.target_logu(self.ref_next_state)
-            ref_chi = self.target_logu.get_chi(ref_logu)
-            new_theta = self.ref_reward - torch.log(ref_chi)
-            new_thetas.append(new_theta)
-            # average self.theta over multiple gradient steps
+
 
             with torch.no_grad():
+                ref_logu = self.online_logu(self.ref_next_state)
+                ref_chi = self.online_logu.get_chi(ref_logu)
+                new_theta = self.ref_reward - torch.log(ref_chi)
+                new_thetas.append(new_theta)
+                # average self.theta over multiple gradient steps
                 # ref_action = torch.from_numpy(np.array(self.ref_action, dtype=np.float32)).to(self.device).unsqueeze(0)
                 # ref_clogu = self.online_logu(self.ref_state).squeeze(0)[self.ref_action]#.gather(1, ref_action.long())
 
@@ -235,17 +236,18 @@ class LogULearner:
 
             # Log the average gradient:
             # TODO: put this in a parallel process somehow or use dot prods?
-            with torch.no_grad():
-                ps = []
-                for p in self.online_logu.parameters():
-                    if p.grad is not None:
-                        # ensure not nan:
-                        if not torch.isnan(p.grad.mean()):
-                            ps.append(p.grad.mean().item())
+            # with torch.no_grad():
+            #     ps = []
+            #     for p in self.online_logu.parameters():
+            #         if p.grad is not None:
+            #             # ensure not nan:
+            #             if not torch.isnan(p.grad.mean()):
+            #                 ps.append(p.grad.mean().item())
 
-            self.logger.record("avg_grad", np.mean(ps))
+            # self.logger.record("avg_grad", np.mean(ps))
             self.optimizer.step()
         # self.theta = torch.mean(torch.stack(new_thetas))
+        # print(new_thetas)
         self.theta = self.tau_theta*self.theta + (1 - self.tau_theta) * torch.mean(torch.stack(new_thetas))
 
     
@@ -366,8 +368,8 @@ def main():
     # env = TimeLimit(env_src, max_episode_steps=max_steps)
     env_id = 'CartPole-v1'
     agent = LogULearner(env_id, beta=4, learning_rate=3e-2, batch_size=1500, buffer_size=45000, 
-                        target_update_interval=150, device='cuda', gradient_steps=40, tau_theta=0.99, tau=0.75,#0.001, 
-                        log_interval=1000, hidden_dim=256)
+                        target_update_interval=150, device='cpu', gradient_steps=40, tau_theta=0.9, tau=0.75,#0.001, 
+                        log_interval=100, hidden_dim=256)
     agent.learn_online(50_000)
     # print(f'Theta: {agent.theta}')
     # print(agent._evec_values)
