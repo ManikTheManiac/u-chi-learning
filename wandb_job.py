@@ -7,6 +7,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMoni
 
 # env = gym.make("MountainCar-v0")
 env = gym.make('CartPole-v1')
+env_id = 'CartPole-v1'
 # env = gym.make('FrozenLake-v1')
 # env = VecMonitor(env)
 # env = Monitor(env, './logs', force=True)
@@ -22,7 +23,7 @@ def runner(config=None, run=None):
     # config.pop('learning_starts')
     # config.pop('policy_kwargs')
 
-    model = LogULearner(env, **config, log_interval=500)
+    model = LogULearner(env_id, **config, log_interval=500)
 
     model.learn_online(total_timesteps=150_000)
 
@@ -39,7 +40,7 @@ def wandb_agent():
 if __name__ == "__main__":
     entity = "jacobhadamczyk"
     project = "LogU-Cartpole"
-    sweep_id = "0ly148kl"
+    sweep_id = "cmoskhlk"
     # Parse the "algo" argument
     parser = argparse.ArgumentParser()
     parser.add_argument("-hd", "--hidden_dim", type=int, default=256)
