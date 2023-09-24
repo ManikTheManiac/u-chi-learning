@@ -16,6 +16,7 @@ LogU learning implementation in gym (mazes and cartpole)
 - [ ] Test the use of clipping theta (min_reward, max_reward) and logu (no theoretical bounds, but -50/50 after norm. to avoid divergence)
 - [ ] Which params most strongly affect logu oscillations?
 - [ ] "..." affect logu divergence? 
+- [ ] Why does using off-policy (pi0) for exploration make logu diverge?
 
 # Features requiring experiments:
 - [ ] use target or online logu for exploration (greedy or not?)

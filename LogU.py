@@ -158,6 +158,7 @@ class LogULearner:
         self.ref_reward = None
         self.theta = torch.Tensor([-1]).to(self.device)
         self.eval_auc = 0
+        self.num_episodes = 0
         # self.replay_buffer = ReplayBuffer(buffer_size)
         
         # Set up the logger:
@@ -212,14 +213,9 @@ class LogULearner:
                 target_next_logu = self.target_logu(next_states)
                 next_logu = target_next_logu.gather(1, next_actions.long())
                 next_chi = self.target_logu.get_chi(next_logu)
-                # new_theta = torch.mean(rewards - 1/self.beta * (curr_logu - torch.log(next_chi)))
-                # new_theta = torch.mean(rewards - torch.log(next_chi))
-                # new_theta = torch.Tensor([-0.9975]).to(self.device) #9791321771142604
-
+                
                 expected_curr_logu = self.beta * (rewards + self.theta) + \
                       (1 - dones) * next_logu#next_chi)# / ref_chi)
-                # self.theta = torch.clamp(new_theta, 0, 1)
-                # self.theta = self.tau_theta*self.theta + (1 - self.tau_theta) * new_theta
 
                 
             self.logger.record("theta", self.theta.item())
@@ -237,18 +233,16 @@ class LogULearner:
 
             # Log the average gradient:
             # TODO: put this in a parallel process somehow or use dot prods?
-            # with torch.no_grad():
-            #     ps = []
-            #     for p in self.online_logu.parameters():
-            #         if p.grad is not None:
-            #             # ensure not nan:
-            #             if not torch.isnan(p.grad.mean()):
-            #                 ps.append(p.grad.mean().item())
-
-            # self.logger.record("avg_grad", np.mean(ps))
+            total_norm = torch.max(torch.stack(
+                        [p.grad.detach().abs().max() for p in self.online_logu.parameters()]
+                        ))
+            self.logger.record("max_grad", total_norm.item())
             self.optimizer.step()
         # self.theta = torch.mean(torch.stack(new_thetas))
-        self.theta = self.tau_theta*self.theta + (1 - self.tau_theta) * torch.mean(torch.stack(new_thetas))
+        new_thetas = torch.stack(new_thetas)
+        # new_thetas = torch.clamp(new_thetas, 0, -1)
+
+        self.theta = self.tau_theta*self.theta + (1 - self.tau_theta) * torch.mean(new_thetas)
 
     
     def learn_online(self, total_timesteps):
@@ -259,8 +253,8 @@ class LogULearner:
                 self.ref_state = state
             episode_reward = 0
             done = False
+            self.num_episodes += 1
             while not done:
-                # self.beta = min(25, self.beta * 1.0001)
                 if isinstance(self.env.observation_space, gym.spaces.Discrete):
                     state = np.array([state])
 
@@ -276,7 +270,6 @@ class LogULearner:
                     self.ref_reward = reward
                     self.ref_next_state = next_state
 
-                # if self.env_steps % 30 == 0: # should this be changed to only learn after done = True?
                 #TODO: Shorten this: (?)
                 if (self.train_freq == -1 and done) or (self.train_freq != -1 and self.env_steps % self.train_freq == 0):
                     if self.replay_buffer.size() > self.batch_size: # or learning_starts?
@@ -302,7 +295,7 @@ class LogULearner:
                     self.logger.record("Env. steps:", self.env_steps)
                     self.logger.record("Eval. reward:", avg_eval_rwd)
                     self.logger.record("eval_auc", self.eval_auc)
-                    self.logger.record("Beta:", self.beta)
+                    self.logger.record("# Episodes:", self.num_episodes)
                     self.logger.dump(step=self.env_steps)
 
 
@@ -365,8 +358,8 @@ def main():
     # )
     # env = TimeLimit(env_src, max_episode_steps=max_steps)
     env_id = 'CartPole-v1'
-    env_id = 'FrozenLake-v1'
-    env_id = 'MountainCar-v0'
+    # env_id = 'FrozenLake-v1'
+    # env_id = 'MountainCar-v0'
     # agent = LogULearner(env_id, beta=4, learning_rate=3e-2, batch_size=1500, buffer_size=45000, 
     #                     target_update_interval=150, device='cpu', gradient_steps=40, tau_theta=0.9, tau=0.75,#0.001, 
     #                     log_interval=100, hidden_dim=256)
