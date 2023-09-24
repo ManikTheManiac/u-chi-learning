@@ -15,7 +15,7 @@ from frozen_lake_env import MAPS, ModifiedFrozenLake, generate_random_map
 from visualization import plot_dist
 from stable_baselines3.common.utils import polyak_update
 from gym.wrappers import TimeLimit
-
+import time
 
 class Memory(object):
     def __init__(self, memory_size: int, device='cpu') -> None:
@@ -253,14 +253,20 @@ class LogULearner:
                 self.ref_state = state
             episode_reward = 0
             done = False
+            action = None
             self.num_episodes += 1
-            while not done:
-                if isinstance(self.env.observation_space, gym.spaces.Discrete):
-                    state = np.array([state])
 
-                torch_state = torch.FloatTensor(state).to(self.device)
-                # if action is None:
-                action = self.online_logu.choose_action(torch_state)
+            # Start a timer to log fps:
+            t0 = time.thread_time_ns()
+            while not done:
+
+                # if isinstance(self.env.observation_space, gym.spaces.Discrete):
+                #     state = np.array([state])
+
+                # torch_state = torch.FloatTensor(state).to(self.device)
+                if action is None:
+                    action = self.online_logu.choose_action(state)
+ 
                 # take a random action:
                 # action = self.env.action_space.sample()
                 next_state, reward, done, _ = self.env.step(action)
@@ -285,9 +291,13 @@ class LogULearner:
                 episode_reward += reward
                 self.replay_buffer.add((state, next_state, action, next_action, reward, done))
                 state = next_state
-                # action = next_action
-        
+                action = next_action
+                
                 if self.env_steps % self.log_interval == 0:
+                    # end timer:
+                    t_final = time.thread_time_ns()
+                    # fps averaged over 500 steps:
+                    fps = self.log_interval / ((t_final - t0) / 1e9)
                     avg_eval_rwd = self.evaluate()
                     self.eval_auc += avg_eval_rwd
                     if self.save_checkpoints:
@@ -296,6 +306,7 @@ class LogULearner:
                     self.logger.record("Eval. reward:", avg_eval_rwd)
                     self.logger.record("eval_auc", self.eval_auc)
                     self.logger.record("# Episodes:", self.num_episodes)
+                    self.logger.record("fps", fps)
                     self.logger.dump(step=self.env_steps)
 
 
@@ -364,7 +375,7 @@ def main():
     #                     target_update_interval=150, device='cpu', gradient_steps=40, tau_theta=0.9, tau=0.75,#0.001, 
     #                     log_interval=100, hidden_dim=256)
     from hparams import cartpole_hparams
-    agent = LogULearner(env_id, **cartpole_hparams, log_dir='tmp', train_freq=10, device='cpu', log_interval=100)
+    agent = LogULearner(env_id, **cartpole_hparams, log_dir='tmp', train_freq=80, device='cpu', log_interval=100)
     agent.learn_online(50_000)
     # print(f'Theta: {agent.theta}')
     # print(agent._evec_values)

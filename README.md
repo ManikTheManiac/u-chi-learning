@@ -1,7 +1,7 @@
 LogU learning implementation in gym (mazes and cartpole)
 
 # New (Simple) Features:
-- [ ] Monitor FPS
+- [x] Monitor FPS
 - [ ] Monitor min/max of logu to watch for divergence
 - [ ] Add learning rate decay thru scheduler
 - [x] Add "train_freq" rather than episodic trainin:
