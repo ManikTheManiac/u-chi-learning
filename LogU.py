@@ -36,7 +36,10 @@ class Memory(object):
             rand = random.randint(0, len(self.buffer) - batch_size)
             batch = [self.buffer[i] for i in range(rand, rand + batch_size)]
         else:
-            indexes = np.random.choice(np.arange(len(self.buffer)), size=batch_size, replace=False)
+            # Sample according to priority:
+            # dist = np.array([1 / (i + 1) for i in range(len(self.buffer))])
+            # dist = dist / np.sum(dist)
+            indexes = np.random.choice(np.arange(len(self.buffer)), size=batch_size, replace=False)#, p=dist)
             batch = [self.buffer[i] for i in indexes]
         
         states, next_states, actions, next_actions, rewards, dones = zip(*batch)
@@ -187,6 +190,7 @@ class LogULearner:
 
     def learn(self,):
         # replay = self.replay_buffer.sample(self.batch_size, env=self._vec_normalize_env)
+        # average self.theta over multiple gradient steps
         new_thetas = []
         for grad_step in range(self.gradient_steps):
             replay = self.replay_buffer.sample(self.batch_size, continuous=False)
@@ -206,9 +210,6 @@ class LogULearner:
                 ref_chi = self.online_logu.get_chi(ref_logu)
                 new_theta = self.ref_reward - torch.log(ref_chi)
                 new_thetas.append(new_theta)
-                # average self.theta over multiple gradient steps
-                # ref_action = torch.from_numpy(np.array(self.ref_action, dtype=np.float32)).to(self.device).unsqueeze(0)
-                # ref_clogu = self.online_logu(self.ref_state).squeeze(0)[self.ref_action]#.gather(1, ref_action.long())
 
                 target_next_logu = self.target_logu(next_states)
                 next_logu = target_next_logu.gather(1, next_actions.long())
@@ -372,7 +373,7 @@ def main():
     #                     target_update_interval=150, device='cpu', gradient_steps=40, tau_theta=0.9, tau=0.75,#0.001, 
     #                     log_interval=100, hidden_dim=256)
     from hparams import cartpole_hparams
-    agent = LogULearner(env_id, **cartpole_hparams, log_dir='tmp', train_freq=180, device='cpu', log_interval=500)
+    agent = LogULearner(env_id, **cartpole_hparams, log_dir='tmp', train_freq=10, device='cpu', log_interval=500)
     agent.learn_online(50_000)
     # print(f'Theta: {agent.theta}')
     # print(agent._evec_values)
