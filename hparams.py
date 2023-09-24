@@ -1,5 +1,5 @@
 cartpole_hparams = {
-    'beta': 1,
+    'beta': 0.1,
     'batch_size': 400,
     'buffer_size': 150000,
     'gradient_steps': 20,

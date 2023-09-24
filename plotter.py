@@ -34,7 +34,7 @@ def plotter(folder):
             #     print(f'file {file} has length {len(df)}')
             #     continue
             df = df[df['tag'] == 'Eval. reward:']
-            if len(df) == 500:
+            if len(df) == 300:
                data_df = pd.concat([data_df, df], axis=1)
 
         except:
@@ -43,7 +43,7 @@ def plotter(folder):
         # print(df)
         # Add the data from the file to the new df by cat:
     # now, plot the new df:
-    t_axis = np.arange(0, 500, 1) * 100
+    t_axis = np.arange(0, 300, 1) * 500
     # take an average of the data_df:
     means = data_df['value'].mean(axis=1)
     num_runs = data_df['value'].shape[1]
@@ -74,7 +74,7 @@ def plotter(folder):
 
 
 if __name__ == "__main__":
-    plotter('ft/cartpole')
+    plotter('ft/cartpole3_0')
     # plotter('ft/pendulum')
-    # plotter('ft/mountaincar')
+    # plotter('ft/mountaincar_0')
     # plotter('ft/acrobot')
