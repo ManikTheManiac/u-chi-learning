@@ -246,27 +246,20 @@ class LogULearner:
 
     
     def learn_online(self, total_timesteps):
+        # Start a timer to log fps:
+        t0 = time.thread_time_ns()
+
         while self.env_steps < total_timesteps:
-        # interact with the environment, episodically:
             state = self.env.reset()
             if self.env_steps == 0:
                 self.ref_state = state
             episode_reward = 0
             done = False
-            action = None
+            action = self.online_logu.choose_action(state)
+
             self.num_episodes += 1
 
-            # Start a timer to log fps:
-            t0 = time.thread_time_ns()
             while not done:
-
-                # if isinstance(self.env.observation_space, gym.spaces.Discrete):
-                #     state = np.array([state])
-
-                # torch_state = torch.FloatTensor(state).to(self.device)
-                if action is None:
-                    action = self.online_logu.choose_action(state)
- 
                 # take a random action:
                 # action = self.env.action_space.sample()
                 next_state, reward, done, _ = self.env.step(action)
@@ -296,8 +289,9 @@ class LogULearner:
                 if self.env_steps % self.log_interval == 0:
                     # end timer:
                     t_final = time.thread_time_ns()
-                    # fps averaged over 500 steps:
+                    # fps averaged over log_interval steps:
                     fps = self.log_interval / ((t_final - t0) / 1e9)
+
                     avg_eval_rwd = self.evaluate()
                     self.eval_auc += avg_eval_rwd
                     if self.save_checkpoints:
@@ -308,6 +302,7 @@ class LogULearner:
                     self.logger.record("# Episodes:", self.num_episodes)
                     self.logger.record("fps", fps)
                     self.logger.dump(step=self.env_steps)
+                    t0 = time.thread_time_ns()
 
 
     def evaluate(self, n_episodes=10):
@@ -369,13 +364,15 @@ def main():
     # )
     # env = TimeLimit(env_src, max_episode_steps=max_steps)
     env_id = 'CartPole-v1'
+    # env_id = 'Acrobot-v1'
+    # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
     # agent = LogULearner(env_id, beta=4, learning_rate=3e-2, batch_size=1500, buffer_size=45000, 
     #                     target_update_interval=150, device='cpu', gradient_steps=40, tau_theta=0.9, tau=0.75,#0.001, 
     #                     log_interval=100, hidden_dim=256)
     from hparams import cartpole_hparams
-    agent = LogULearner(env_id, **cartpole_hparams, log_dir='tmp', train_freq=80, device='cpu', log_interval=100)
+    agent = LogULearner(env_id, **cartpole_hparams, log_dir='tmp', train_freq=180, device='cpu', log_interval=500)
     agent.learn_online(50_000)
     # print(f'Theta: {agent.theta}')
     # print(agent._evec_values)
