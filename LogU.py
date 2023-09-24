@@ -124,6 +124,8 @@ class LogULearner:
                  hidden_dim=64,
                  tau_theta=0.001,
                  gradient_steps=1,
+                 train_freq=-1,
+                 max_grad_norm=10,
                  device='cpu',
                  run_name='',
                  log_dir=None,
@@ -147,6 +149,8 @@ class LogULearner:
         self.save_checkpoints = save_checkpoints
         self.log_interval = log_interval
         self.tau_theta = tau_theta
+        self.train_freq = train_freq
+        self.max_grad_norm = max_grad_norm
         
         self.replay_buffer = Memory(buffer_size, device=device)
         self.ref_action = None
@@ -172,7 +176,6 @@ class LogULearner:
         self._initialize_networks()
 
     def _initialize_networks(self):
-
         self.online_logu = LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
         self.target_logu = LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
         self.target_logu.load_state_dict(self.online_logu.state_dict())
@@ -196,8 +199,6 @@ class LogULearner:
             curr_logu = self.online_logu(states)
             curr_logu = curr_logu.squeeze(1)#self.online_logu(states).squeeze(1)
             curr_logu = curr_logu.gather(1, actions.long())
-
-
 
             with torch.no_grad():
                 ref_logu = self.online_logu(self.ref_next_state)
@@ -232,7 +233,7 @@ class LogULearner:
             
             # Clip gradient norm
             loss.backward()
-            # torch.nn.utils.clip_grad_norm_(self.online_logu.parameters(), 10)
+            torch.nn.utils.clip_grad_norm_(self.online_logu.parameters(), self.max_grad_norm)
 
             # Log the average gradient:
             # TODO: put this in a parallel process somehow or use dot prods?
@@ -247,7 +248,6 @@ class LogULearner:
             # self.logger.record("avg_grad", np.mean(ps))
             self.optimizer.step()
         # self.theta = torch.mean(torch.stack(new_thetas))
-        # print(new_thetas)
         self.theta = self.tau_theta*self.theta + (1 - self.tau_theta) * torch.mean(torch.stack(new_thetas))
 
     
@@ -277,11 +277,10 @@ class LogULearner:
                     self.ref_next_state = next_state
 
                 # if self.env_steps % 30 == 0: # should this be changed to only learn after done = True?
-                if done:
+                #TODO: Shorten this: (?)
+                if (self.train_freq == -1 and done) or (self.train_freq != -1 and self.env_steps % self.train_freq == 0):
                     if self.replay_buffer.size() > self.batch_size: # or learning_starts?
-                        # Begin learning:
                         self.learn()
-                        self.env.reset()
 
                 if self.env_steps % self.target_update_interval == 0:
                     # Do a Polyak update of parameters:
@@ -324,7 +323,6 @@ class LogULearner:
 
                 avg_reward += reward
                 state = next_state
-                # print(reward)
         avg_reward /= n_episodes
         self.eval_env.close()
         return avg_reward
@@ -367,9 +365,13 @@ def main():
     # )
     # env = TimeLimit(env_src, max_episode_steps=max_steps)
     env_id = 'CartPole-v1'
-    agent = LogULearner(env_id, beta=4, learning_rate=3e-2, batch_size=1500, buffer_size=45000, 
-                        target_update_interval=150, device='cpu', gradient_steps=40, tau_theta=0.9, tau=0.75,#0.001, 
-                        log_interval=100, hidden_dim=256)
+    env_id = 'FrozenLake-v1'
+    env_id = 'MountainCar-v0'
+    # agent = LogULearner(env_id, beta=4, learning_rate=3e-2, batch_size=1500, buffer_size=45000, 
+    #                     target_update_interval=150, device='cpu', gradient_steps=40, tau_theta=0.9, tau=0.75,#0.001, 
+    #                     log_interval=100, hidden_dim=256)
+    from hparams import cartpole_hparams
+    agent = LogULearner(env_id, **cartpole_hparams, log_dir='tmp', train_freq=10, device='cpu', log_interval=100)
     agent.learn_online(50_000)
     # print(f'Theta: {agent.theta}')
     # print(agent._evec_values)
