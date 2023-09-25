@@ -1,3 +1,4 @@
+from disc_envs import get_environment
 import gym
 import torch
 import torch.nn as nn
@@ -10,6 +11,8 @@ from stable_baselines3.common.vec_env import unwrap_vec_normalize
 from stable_baselines3.common.logger import configure
 import os
 from torch.nn import functional as F
+from frozen_lake_env import MAPS, ModifiedFrozenLake, generate_random_map
+from visualization import plot_dist
 from stable_baselines3.common.utils import polyak_update
 from gym.wrappers import TimeLimit
 import time
@@ -39,16 +42,15 @@ class Memory(object):
             indexes = np.random.choice(np.arange(len(self.buffer)), size=batch_size, replace=False)#, p=dist)
             batch = [self.buffer[i] for i in indexes]
         
-        states, next_states, actions, next_actions, rewards, dones = zip(*batch)
+        states, next_states, actions, rewards, dones = zip(*batch)
         # Now convert to tensors:
         states = torch.from_numpy(np.array(states, dtype=np.float32)).to(self.device)
         next_states = torch.from_numpy(np.array(next_states, dtype=np.float32)).to(self.device)
         actions = torch.from_numpy(np.array(actions, dtype=np.float32)).to(self.device)
-        next_actions = torch.from_numpy(np.array(next_actions, dtype=np.float32)).to(self.device)
         rewards = torch.from_numpy(np.array(rewards, dtype=np.float32)).to(self.device)
         dones = torch.from_numpy(np.array(dones, dtype=np.float32)).to(self.device)
 
-        return states, next_states, actions, next_actions, rewards, dones
+        return states, next_states, actions, rewards, dones
 
     def clear(self):
         self.buffer.clear()
@@ -69,7 +71,6 @@ class LogUNet(nn.Module):
         self.fc2 = nn.Linear(hidden_dim, hidden_dim, device=self.device)
         self.fc3 = nn.Linear(hidden_dim, self.nA, device=self.device)
         self.relu = nn.ReLU()
-        # self.relu = nn.LeakyReLU()
      
     def forward(self, x):
         # Check if in batch mode:
@@ -99,6 +100,7 @@ class LogUNet(nn.Module):
             logu = self.forward(state)
 
             if greedy:
+                # raise NotImplementedError("Greedy not implemented (possible bug?).")
                 a = logu.argmax()
                 return a.item()
 
@@ -109,7 +111,7 @@ class LogUNet(nn.Module):
             c = Categorical(dist)
             a = c.sample()
 
-        return a.item()
+        return a
 
 
 class LogULearner:
@@ -156,7 +158,7 @@ class LogULearner:
         self.ref_action = None
         self.ref_state = None
         self.ref_reward = None
-        self.theta = torch.Tensor([0]).to(self.device)
+        self.theta = torch.Tensor([-1]).to(self.device)
         self.eval_auc = 0
         self.num_episodes = 0
         # self.replay_buffer = ReplayBuffer(buffer_size)
@@ -185,16 +187,16 @@ class LogULearner:
         self.optimizer = torch.optim.Adam(self.online_logu.parameters(), lr=self.learning_rate)
 
 
-    def train(self,):
+    def learn(self,):
         # replay = self.replay_buffer.sample(self.batch_size, env=self._vec_normalize_env)
         # average self.theta over multiple gradient steps
         new_thetas = []
         for grad_step in range(self.gradient_steps):
             replay = self.replay_buffer.sample(self.batch_size, continuous=False)
-            states, next_states, actions, next_actions, rewards, dones = replay
+            states, next_states, actions, rewards, dones = replay
 
             actions = actions.unsqueeze(1)
-            next_actions = next_actions.unsqueeze(1)
+            # next_actions = next_actions.unsqueeze(1)
             rewards = rewards.unsqueeze(1)
             dones = dones.unsqueeze(1)
 
@@ -208,18 +210,22 @@ class LogULearner:
                 new_theta = self.ref_reward - torch.log(ref_chi)
                 new_thetas.append(new_theta)
 
-                target_next_logu = self.target_logu(next_states)
-                next_logu = target_next_logu.gather(1, next_actions.long())
+                target_next_logu = self.online_logu(next_states)
+                # Sample next_actions from the target network:
+                # but we were choosing them from online network in train loop....?
+                next_actions = self.online_logu.choose_action(next_states)
+                next_logu = target_next_logu.gather(1,next_actions.unsqueeze(1))
+                # next_logu = target_next_logu.gather(1, next_actions.long())
+                next_chi = self.target_logu.get_chi(next_logu)
                 
-                expected_curr_logu = self.beta * (rewards + self.theta) + (1 - dones) * next_logu
+                expected_curr_logu = self.beta * (rewards + self.theta) + \
+                      (1 - dones) * next_logu#next_chi)# / ref_chi)
 
                 
             self.logger.record("theta", self.theta.item())
             self.logger.record("avg logu", curr_logu.mean().item())
             # Huber loss:
             loss = F.smooth_l1_loss(curr_logu, expected_curr_logu)
-            # MSE loss:
-            # loss = F.mse_loss(curr_logu, expected_curr_logu)
             self.logger.record("loss", loss.item())
             self.optimizer.zero_grad()
             # Increase update counter
@@ -243,7 +249,7 @@ class LogULearner:
         self.theta = self.tau_theta*self.theta + (1 - self.tau_theta) * torch.mean(new_thetas)
 
     
-    def learn(self, total_timesteps):
+    def learn_online(self, total_timesteps):
         # Start a timer to log fps:
         t0 = time.thread_time_ns()
 
@@ -254,14 +260,13 @@ class LogULearner:
             episode_reward = 0
             done = False
             action = self.online_logu.choose_action(state)
-
             self.num_episodes += 1
-            self.rollout_reward = 0
+
             while not done:
                 # take a random action:
                 # action = self.env.action_space.sample()
-                next_state, reward, done, _ = self.env.step(action)
-                self.rollout_reward += reward
+                next_state, reward, done, _ = self.env.step(action.item())
+
                 if self.env_steps == 0:
                     self.ref_action = action
                     self.ref_reward = reward
@@ -270,7 +275,7 @@ class LogULearner:
                 #TODO: Shorten this: (?)
                 if (self.train_freq == -1 and done) or (self.train_freq != -1 and self.env_steps % self.train_freq == 0):
                     if self.replay_buffer.size() > self.batch_size: # or learning_starts?
-                        self.train()
+                        self.learn()
 
                 if self.env_steps % self.target_update_interval == 0:
                     # Do a Polyak update of parameters:
@@ -279,10 +284,8 @@ class LogULearner:
         
                 self.env_steps += 1
                 next_action = self.online_logu.choose_action(next_state)
-                # next_action = self.env.action_space.sample()
-
                 episode_reward += reward
-                self.replay_buffer.add((state, next_state, action, next_action, reward, done))
+                self.replay_buffer.add((state, next_state, action, reward, done))
                 state = next_state
                 action = next_action
                 
@@ -303,17 +306,13 @@ class LogULearner:
                     self.logger.record("fps", fps)
                     self.logger.dump(step=self.env_steps)
                     t0 = time.thread_time_ns()
-                self.logger.record("Rollout reward:", self.rollout_reward)
 
 
-
-    def evaluate(self, n_episodes=5):
+    def evaluate(self, n_episodes=10):
         # run the current policy and return the average reward
         avg_reward = 0.
         # Wrap a timelimit:
         # self.eval_env = TimeLimit(self.eval_env, max_episode_steps=500)
-        # move to cpu for evaluation:
-        # self.eval_env = self.eval_env.to('cpu')
         for ep in range(n_episodes):
             state = self.eval_env.reset()
             done = False
@@ -347,9 +346,28 @@ class LogULearner:
         return np.exp(logu)
 
 def main():
+    desc = generate_random_map(size=4)
+    env = gym.make('FrozenLake-v1', is_slippery=0)#, desc=desc)
+    # env = get_environment('Pendulum', nbins=5, max_episode_steps=200)
+    env = gym.make('CartPole-v1')
+    # env = gym.make('MountainCar-v0')
+    # use a 500 timestep limit:
+
+    # env = TimeLimit(env.env, max_episode_steps=500)
+    # env = gym.make('FrozenLake-v1', is_slippery=False)#, desc=desc)
+    # n_action = 4
+    # max_steps = 200
+    # desc = np.array(MAPS['3x5uturn'], dtype='c')
+    # env_src = ModifiedFrozenLake(
+    #     n_action=n_action, max_reward=1, min_reward=0,
+    #     step_penalization=0, desc=desc, never_done=False, cyclic_mode=True,
+    #     # between 0. and 1., a probability of staying at goal state
+    #     # an integer. 0: deterministic dynamics. 1: stochastic dynamics.
+    #     slippery=0,
+    # )
+    # env = TimeLimit(env_src, max_episode_steps=max_steps)
     env_id = 'CartPole-v1'
     # env_id = 'Acrobot-v1'
-    # env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
@@ -357,11 +375,8 @@ def main():
     #                     target_update_interval=150, device='cpu', gradient_steps=40, tau_theta=0.9, tau=0.75,#0.001, 
     #                     log_interval=100, hidden_dim=256)
     from hparams import cartpole_hparams0
-    agent = LogULearner(env_id, **cartpole_hparams0, log_dir=None, device='cpu', log_interval=2000)
-    # agent.learn(250_000)
-    from stable_baselines3 import PPO
-    # agent = PPO('MlpPolicy', env_id, verbose=1, device='cuda', tensorboard_log='tmp')
-    agent.learn(total_timesteps=50_000)
+    agent = LogULearner(env_id, **cartpole_hparams0, log_dir='tmp', train_freq=10, device='cpu', log_interval=500)
+    agent.learn_online(50_000)
     # print(f'Theta: {agent.theta}')
     # print(agent._evec_values)
     # pi = agent._evec_values.reshape((16,4))

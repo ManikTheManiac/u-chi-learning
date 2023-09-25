@@ -17,6 +17,7 @@ LogU learning implementation in gym (mazes and cartpole)
 - [ ] Which params most strongly affect logu oscillations?
 - [ ] "..." affect logu divergence? 
 - [ ] Why does using off-policy (pi0) for exploration make logu diverge?
+- [ ] Which activation function is best?
 
 # Features requiring experiments:
 - [ ] use target or online logu for exploration (greedy or not?)

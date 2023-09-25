@@ -1,4 +1,4 @@
-# Subclass the sb3 DQN to allow logging eval auc:
+# Subclass the sb3 DQN to allow logging eval auc for hparam tuning
 
 from stable_baselines3 import DQN
 from stable_baselines3.common.utils import polyak_update
