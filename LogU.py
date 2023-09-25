@@ -1,11 +1,6 @@
 import gym
 import torch
-import torch.nn as nn
-from collections import deque
-import random
-from torch.distributions import Categorical
 import numpy as np
-from stable_baselines3.common.preprocessing import preprocess_obs
 from stable_baselines3.common.vec_env import unwrap_vec_normalize
 from stable_baselines3.common.logger import configure
 import os
@@ -13,103 +8,8 @@ from torch.nn import functional as F
 from stable_baselines3.common.utils import polyak_update
 from gym.wrappers import TimeLimit
 import time
-
-class Memory(object):
-    def __init__(self, memory_size: int, device='cpu') -> None:
-        self.memory_size = memory_size
-        self.device = device
-        self.buffer = deque(maxlen=self.memory_size)
-
-    def add(self, experience) -> None:
-        self.buffer.append(experience)
-
-    def size(self):
-        return len(self.buffer)
-
-    def sample(self, batch_size: int, continuous: bool = True):
-        if batch_size > len(self.buffer):
-            batch_size = len(self.buffer)
-        if continuous:
-            rand = random.randint(0, len(self.buffer) - batch_size)
-            batch = [self.buffer[i] for i in range(rand, rand + batch_size)]
-        else:
-            # Sample according to priority:
-            # dist = np.array([1 / (i + 1) for i in range(len(self.buffer))])
-            # dist = dist / np.sum(dist)
-            indexes = np.random.choice(np.arange(len(self.buffer)), size=batch_size, replace=False)#, p=dist)
-            batch = [self.buffer[i] for i in indexes]
-        
-        states, next_states, actions, next_actions, rewards, dones = zip(*batch)
-        # Now convert to tensors:
-        states = torch.from_numpy(np.array(states, dtype=np.float32)).to(self.device)
-        next_states = torch.from_numpy(np.array(next_states, dtype=np.float32)).to(self.device)
-        actions = torch.from_numpy(np.array(actions, dtype=np.float32)).to(self.device)
-        next_actions = torch.from_numpy(np.array(next_actions, dtype=np.float32)).to(self.device)
-        rewards = torch.from_numpy(np.array(rewards, dtype=np.float32)).to(self.device)
-        dones = torch.from_numpy(np.array(dones, dtype=np.float32)).to(self.device)
-
-        return states, next_states, actions, next_actions, rewards, dones
-
-    def clear(self):
-        self.buffer.clear()
-
-
-class LogUNet(nn.Module):
-    def __init__(self, env, device='cuda', hidden_dim=256):
-        super(LogUNet, self).__init__()
-        self.env = env
-        self.device = device
-        try:
-            self.nS = env.observation_space.n
-        except AttributeError:
-            self.nS = env.observation_space.shape[0]
-
-        self.nA = env.action_space.n
-        self.fc1 = nn.Linear(self.nS, hidden_dim, device=self.device)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim, device=self.device)
-        self.fc3 = nn.Linear(hidden_dim, self.nA, device=self.device)
-        self.relu = nn.ReLU()
-        # self.relu = nn.LeakyReLU()
-     
-    def forward(self, x):
-        # Check if in batch mode:
-        if isinstance(x, int):
-            x = torch.from_numpy(np.array([x])).to(device=self.device)
-        else:
-            if isinstance(x, np.ndarray):
-                x = torch.from_numpy(x).to(device=self.device)
-
-        x = preprocess_obs(x, self.env.observation_space)
-
-        x = self.fc1(x)
-        x = self.relu(x)
-        x = self.fc2(x)
-        x = self.relu(x)
-        x = self.fc3(x)
-
-        return x
-
-    def get_chi(self, logu_a):
-        prior_policy = 1 / self.nA
-        chi = torch.sum(prior_policy * torch.exp(logu_a))
-        return chi
-        
-    def choose_action(self, state, greedy=False):
-        with torch.no_grad():
-            logu = self.forward(state)
-
-            if greedy:
-                a = logu.argmax()
-                return a.item()
-
-            # First subtract a baseline:
-            logu = logu - (torch.max(logu) + torch.min(logu))/2
-            dist = torch.exp(logu) * 1 / self.nA
-            dist = dist / torch.sum(dist)
-            c = Categorical(dist)
-            a = c.sample()
-
-        return a.item()
+from ReplayBuffers import Memory
+from Models import LogUNet
 
 
 class LogULearner:
@@ -349,7 +249,7 @@ class LogULearner:
 def main():
     env_id = 'CartPole-v1'
     # env_id = 'Acrobot-v1'
-    # env_id = 'LunarLander-v2'
+    env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
@@ -360,7 +260,7 @@ def main():
     agent = LogULearner(env_id, **cartpole_hparams0, log_dir=None, device='cpu', log_interval=2000)
     # agent.learn(250_000)
     from stable_baselines3 import PPO
-    # agent = PPO('MlpPolicy', env_id, verbose=1, device='cuda', tensorboard_log='tmp')
+    agent = PPO('MlpPolicy', env_id, verbose=1, device='cuda', tensorboard_log='tmp')
     agent.learn(total_timesteps=50_000)
     # print(f'Theta: {agent.theta}')
     # print(agent._evec_values)
