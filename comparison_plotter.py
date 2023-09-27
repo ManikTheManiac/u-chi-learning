@@ -1,5 +1,3 @@
-# Plot the results stored in the ft (finetuned) folder CSVs:
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -9,74 +7,58 @@ from tbparse import SummaryReader
 
 sns.set_theme(style="darkgrid")
 
+def plotter(folder, metrics=['eval/avg_reward']):
+    # First, scan the folder for the different algorithms:
+    algos = []
+    algo_to_data = {}
+    for subfolder in os.listdir(folder):
+        algo_name = subfolder.split('_')[0]
+        if algo_name not in algos:
+            algos.append(algo_name)
+            algo_to_data[algo_name] = pd.DataFrame()
 
-import traceback
-import pandas as pd
-from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
-
-#
-def plotter(folder):
-    # create a new df with the same number of rows as the number of dfs in the folder
-    data_df = pd.DataFrame()
     # iterate through the files in the folder
-    for file_num, file in enumerate(os.listdir(folder)):
+    for subfolder in os.listdir(folder):
+        # Extract algorithm name, and add it to the df:
+        algo_name = subfolder.split('_')[0]
+        # There should be only one file in the subfolder:
+        subfiles = os.listdir(f'{folder}/{subfolder}')
+        # ignore csvs:
+        subfiles = [f for f in subfiles if not f.endswith('.csv')]
+        file = subfiles[0]
+        
         # Convert the tensorboard file to a pandas dataframe:
-        log_file = f'{folder}/{file}'
-        # make sure it does not end with csv, png:
-        if log_file.endswith('.csv') or log_file.endswith('.png'):
-            continue
+        log_file = f'{folder}/{subfolder}/{file}'
         reader = SummaryReader(log_file)
         df = reader.scalars
-        # filter for the eval reward tag:
-        try:
-            # ensure length is 500:
-            # if len(df) != 500:
-            #     print(f'file {file} has length {len(df)}')
-            #     continue
-            df = df[df['tag'] == 'eval/avg_reward:']
-            print(len(df))
-            if len(df) == 60:
-               data_df = pd.concat([data_df, df], axis=1)
+        # filter the desired metrics:
+        # strip the : from the metrics:
+        df = df[df['tag'].isin(metrics)]
+        # Add the data from the file to the new df by cat, using algo_name+num as the column name:
+        algo_df = algo_to_data[algo_name]
+        algo_df = pd.concat([algo_df, df], axis=1)
+        algo_to_data[algo_name] = algo_df
 
-        except:
-            print(f'file {file} has no eval reward tag')
-            continue
-        # print(df)
-        # Add the data from the file to the new df by cat:
-    # now, plot the new df:
-    t_axis = np.arange(0, 60, 1) * 500
-    # take an average of the data_df:
-    means = data_df['value'].mean(axis=1)
-    num_runs = data_df['value'].shape[1]
-    print(f'num_runs: {num_runs}')
-    stds = data_df['value'].std(axis=1) / np.sqrt(num_runs)
-    # calculate the 99% confidence interval bootstrap:
-    # stds = data_df['value'].quantile(0.95, axis=1) - data_df['value'].quantile(0.05, axis=1)
+    plt.figure()
+    # now, plot the dfs from each algo:
+    for algo_name in algos:
+        data = algo_to_data[algo_name]
+        # plot with errors:
+        log_interval = 500
+        t_axis = np.arange(0, len(data) * log_interval, log_interval)
+        # take an average of the data_df:
+        means = data['value'].mean(axis=1)
+        num_runs = data['value'].shape[1]
+        stds = data['value'].std(axis=1) / np.sqrt(num_runs)
+        # plot with errors:
+        plt.plot(t_axis, means, label=algo_name)
+        plt.fill_between(t_axis, means - stds, means + stds, alpha=0.5)
 
-    
-    # plot with errors:
-    plt.plot(t_axis, means)
-    # plt.xlim(0,30000)
-    plt.fill_between(t_axis, means - stds, means + stds, alpha=0.5)
-    plt.xlabel('Timesteps')
-    plt.ylabel('Reward')
-    plt.title('Eval Reward vs Timesteps')
-    plt.savefig(f'{folder}/eval_plot.png')
-    plt.close()
-    # Plot the individual runs, with smoothing over a window of w=50:
-    # w = 10
-    # plt.figure()
-    # for i in range(num_runs):
-    #     plt.plot(t_axis, data_df['value'].iloc[:,i].rolling(window=w).mean(), alpha=0.5)
-    # plt.xlabel('Timesteps')
-    # plt.ylabel('Reward')
-    # plt.title('Eval Reward vs Timesteps')
-    # plt.savefig(f'{folder}/eval_plot_runs.png')
+    plt.legend()
+    plt.xlabel('Environment Steps')
+    plt.ylabel('Average Evaluation Reward')
+    plt.savefig(f'{folder}_rwds.png')
+    plt.show()
 
-
-if __name__ == "__main__":
-    # plotter('ft/cartpole6_0')
-    plotter('ft/benchmark_0')
-    # plotter('ft/pendulum')
-    # plotter('ft/mountaincar_0')
-    # plotter('ft/acrobot')
+if __name__ == '__main__':
+    plotter('ft/benchmark')

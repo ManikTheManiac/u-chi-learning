@@ -187,10 +187,10 @@ class LogULearner:
                     self.eval_auc += avg_eval_rwd
                     if self.save_checkpoints:
                         torch.save(self.online_logu.state_dict(), 'sql-policy.para')
-                    self.logger.record("Env. steps:", self.env_steps)
-                    self.logger.record("eval/avg_reward:", avg_eval_rwd)
+                    self.logger.record("env. steps", self.env_steps)
+                    self.logger.record("eval/avg_reward", avg_eval_rwd)
                     self.logger.record("eval/auc", self.eval_auc)
-                    self.logger.record("# Episodes:", self.num_episodes)
+                    self.logger.record("num. episodes", self.num_episodes)
                     self.logger.record("fps", fps)
                     self.logger.dump(step=self.env_steps)
                     t0 = time.thread_time_ns()

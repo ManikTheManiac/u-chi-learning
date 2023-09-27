@@ -1,63 +1,78 @@
-# Subclass the sb3 DQN to allow logging eval auc for hparam tuning
-# Use mlp policy and constant hidden dim to match LogU learning
+import sys
+import time
 from stable_baselines3 import DQN
 from stable_baselines3.common.utils import polyak_update
-
+from stable_baselines3.common.utils import safe_mean, should_collect_more_steps
 
 class CustomDQN(DQN):
     def __init__(self, *args, log_interval=500, hidden_dim=64, log_dir='', **kwargs):
-        super().__init__('MlpPolicy', *args, **kwargs)
+        super().__init__('MlpPolicy', *args, verbose=4, **kwargs)
         self.eval_auc = 0
+        self.eval_rwd = 0
         self.eval_interval = log_interval
         self.eval_env = self.env
 
         # Translate hidden dim to policy_kwargs:
         self.policy_kwargs = {'net_arch': [hidden_dim, hidden_dim]}
 
-        # Set up logging: 
+        # Set up logging:
         self.tensorboard_log = log_dir
 
     def _on_step(self) -> None:
-        """
-        Update the exploration rate and target network if needed.
-        This method is called in ``collect_rollouts()`` after each step in the environment.
-        """
-        self._n_calls += 1
-        if self._n_calls % self.target_update_interval == 0:
-            polyak_update(self.q_net.parameters(),
-                          self.q_net_target.parameters(), self.tau)
-            # Copy running stats, see GH issue #996
-            polyak_update(self.batch_norm_stats,
-                          self.batch_norm_stats_target, 1.0)
-
-        self.exploration_rate = self.exploration_schedule(
-            self._current_progress_remaining)
-        self.logger.record("rollout/exploration_rate", self.exploration_rate)
-
-        # evaluate the agent and log it if step % log_interval == 0:
+        # Evaluate the agent and log it if step % log_interval == 0:
         if self._n_calls % self.eval_interval == 0:
-            eval_rwd = self.evaluate_agent()
-            self.eval_auc += eval_rwd
-            self.logger.record("eval/avg_rwd", eval_rwd)
+            self.eval_rwd = self.evaluate_agent()
+            self.eval_auc += self.eval_rwd
             self.logger.record("eval/auc", self.eval_auc)
-            self.logger.dump(step=self._n_calls)
+            self.logger.record("eval/avg_reward", self.eval_rwd)
+            # self._dump_logs()#step=self.num_timesteps)
+            self.logger.dump(step=self.num_timesteps)
+
+        # Do super's self._on_step:
+        super()._on_step()
 
     def evaluate_agent(self, n_episodes=1):
-        # run the current policy and return the average reward
+        # Run the current policy and return the average reward
         avg_reward = 0.
-        # Wrap a timelimit:
-        # self.eval_env = TimeLimit(self.eval_env, max_episode_steps=500)
-        for ep in range(n_episodes):
+        for _ in range(n_episodes):
             state = self.eval_env.reset()
             done = False
             while not done:
                 action = self.predict(state, deterministic=True)[0]
-
                 next_state, reward, done, _ = self.eval_env.step(action)
-
                 avg_reward += reward
                 state = next_state
-                # print(reward)
         avg_reward /= n_episodes
         self.eval_env.close()
-        return avg_reward
+        return float(avg_reward)
+
+    def _dump_logs(self) -> None:
+        """
+        Write log.
+        """
+        time_elapsed = max((time.time_ns() - self.start_time) / 1e9, sys.float_info.epsilon)
+        fps = int((self.num_timesteps - self._num_timesteps_at_start) / time_elapsed)
+        self.logger.record("time/episodes", self._episode_num, exclude="tensorboard")
+        if len(self.ep_info_buffer) > 0 and len(self.ep_info_buffer[0]) > 0:
+            self.logger.record("rollout/ep_rew_mean", safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer]))
+            self.logger.record("rollout/ep_len_mean", safe_mean([ep_info["l"] for ep_info in self.ep_info_buffer]))
+            self.logger.record("eval/auc", self.eval_auc)
+            self.logger.record("eval/avg_reward", self.eval_rwd)
+
+        self.logger.record("time/fps", fps)
+        self.logger.record("time/time_elapsed", int(time_elapsed), exclude="tensorboard")
+        self.logger.record("time/total_timesteps", self.num_timesteps, exclude="tensorboard")
+
+        # Ensure eval/avg_reward is recorded, even if no episode was completed:
+        # self.eval_rwd = self.evaluate_agent()
+        # self.eval_auc += self.eval_rwd
+
+
+        if self.use_sde:
+            self.logger.record("train/std", (self.actor.get_std()).mean().item())
+
+        if len(self.ep_success_buffer) > 0:
+            self.logger.record("rollout/success_rate", safe_mean(self.ep_success_buffer))
+        
+        # Pass the number of timesteps for tensorboard
+        # self.logger.dump(step=self.num_timesteps)

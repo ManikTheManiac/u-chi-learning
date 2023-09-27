@@ -12,7 +12,6 @@ def runner(algo):
         config = cartpole_hparams1
         algo = LogULearner
     elif algo == 'dqn':
-
         config = cartpole_dqn
         algo = CustomDQN
 
@@ -21,9 +20,9 @@ def runner(algo):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--count', type=int, default=80)
+    parser.add_argument('-c', '--count', type=int, default=12)
     parser.add_argument('-a', '--algo', type=str, default='logu')
     args = parser.parse_args()
 
     for i in range(args.count):
-        runner('logu')
+        runner('dqn')
