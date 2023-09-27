@@ -1,15 +1,21 @@
 # Subclass the sb3 DQN to allow logging eval auc for hparam tuning
-
+# Use mlp policy and constant hidden dim to match LogU learning
 from stable_baselines3 import DQN
 from stable_baselines3.common.utils import polyak_update
 
 
 class CustomDQN(DQN):
-    def __init__(self, *args, eval_interval=500, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, log_interval=500, hidden_dim=64, log_dir='', **kwargs):
+        super().__init__('MlpPolicy', *args, **kwargs)
         self.eval_auc = 0
-        self.eval_interval = eval_interval
+        self.eval_interval = log_interval
         self.eval_env = self.env
+
+        # Translate hidden dim to policy_kwargs:
+        self.policy_kwargs = {'net_arch': [hidden_dim, hidden_dim]}
+
+        # Set up logging: 
+        self.tensorboard_log = log_dir
 
     def _on_step(self) -> None:
         """
@@ -32,8 +38,9 @@ class CustomDQN(DQN):
         if self._n_calls % self.eval_interval == 0:
             eval_rwd = self.evaluate_agent()
             self.eval_auc += eval_rwd
-            self.logger.record("Eval. reward:", eval_rwd)
-            self.logger.record("eval_auc", self.eval_auc)
+            self.logger.record("eval/avg_rwd", eval_rwd)
+            self.logger.record("eval/auc", self.eval_auc)
+            self.logger.dump(step=self._n_calls)
 
     def evaluate_agent(self, n_episodes=1):
         # run the current policy and return the average reward

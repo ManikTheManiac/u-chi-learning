@@ -233,19 +233,19 @@ class LogULearner:
 def main():
     env_id = 'CartPole-v1'
     # env_id = 'Acrobot-v1'
-    # env_id = 'LunarLander-v2'
+    env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
-    # env_id = 'MountainCar-v0'
+    env_id = 'MountainCar-v0'
     # agent = LogULearner(env_id, beta=4, learning_rate=3e-2, batch_size=1500, buffer_size=45000, 
     #                     target_update_interval=150, device='cpu', gradient_steps=40, tau_theta=0.9, tau=0.75,#0.001, 
     #                     log_interval=100, hidden_dim=256)
     from hparams import cartpole_hparams1 as config
-    agent = LogULearner(env_id, **config, log_dir=None, device='cpu', log_interval=2000)
+    agent = LogULearner(env_id, **config, log_dir='tmp', device='cuda', max_grad_norm=1, log_interval=2000)
     # agent.learn(250_000)
     from stable_baselines3 import PPO
     # agent = PPO('MlpPolicy', env_id, verbose=1, device='cuda', tensorboard_log='tmp')
-    agent.learn(total_timesteps=50_000)
+    agent.learn(total_timesteps=150_000)
     # print(f'Theta: {agent.theta}')
     # print(agent._evec_values)
     # pi = agent._evec_values.reshape((16,4))

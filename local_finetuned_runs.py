@@ -1,24 +1,29 @@
 import argparse
-import wandb
-import gym
 from LogU import LogULearner
-from hparams import cartpole_hparams1
+from CustomDQN import CustomDQN
+from LogU import LogULearner
+from hparams import cartpole_hparams1, cartpole_dqn
 
-# env = 'MountainCar-v0'# = gym.make('CartPole-v1')
 env = 'CartPole-v1'
-config = cartpole_hparams1
+configs = {'logu': cartpole_hparams1, 'dqn': cartpole_dqn}
 
-def runner(config=config):
-    # config['hidden_dim'] = args.hidden_dim
-    model = LogULearner(env, **config, log_dir='ft/cartpole6', device='cuda', log_interval=500)
+def runner(algo):
+    if algo == 'logu':
+        config = cartpole_hparams1
+        algo = LogULearner
+    elif algo == 'dqn':
+
+        config = cartpole_dqn
+        algo = CustomDQN
+
+    model = algo(env, **config, log_dir='ft/benchmark', device='cuda', log_interval=500)
     model.learn(total_timesteps=30_000)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    # parser.add_argument("-hd", "--hidden_dim", type=int, default=256)
-    parser.add_argument("-c", "--count", type=int, default=40)
-    
+    parser.add_argument('-c', '--count', type=int, default=80)
+    parser.add_argument('-a', '--algo', type=str, default='logu')
     args = parser.parse_args()
 
     for i in range(args.count):
-        runner()
+        runner('logu')

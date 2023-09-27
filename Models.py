@@ -72,8 +72,8 @@ class UNet(nn.Module):
         self.fc1 = nn.Linear(self.nS, hidden_dim, device=self.device)
         self.fc2 = nn.Linear(hidden_dim, hidden_dim, device=self.device)
         self.fc3 = nn.Linear(hidden_dim, self.nA, device=self.device)
-        # self.relu = nn.ReLU()
-        self.relu = nn.LeakyReLU()
+        self.relu = nn.Tanh()
+        # self.relu = nn.LeakyReLU()
      
     def forward(self, x):
         if not isinstance(x, torch.Tensor):
@@ -88,6 +88,7 @@ class UNet(nn.Module):
         x = self.fc3(x)
 
         return torch.abs(x)
+        # return self.relu(x+4) + 1e-6
 
     def get_chi(self, u_a):
         prior_policy = 1 / self.nA
