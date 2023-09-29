@@ -35,7 +35,8 @@ class TargetNets():
 
     def polyak(self, new_weights, tau):
         for weights, new_weights in zip(self.parameters(), new_weights):
-            polyak_update(weights, new_weights, tau)
+            polyak_update(new_weights, weights, tau)
+
 
     def parameters(self):
         return [net.parameters() for net in self.nets]
@@ -79,7 +80,7 @@ class LogULearner:
                  target_update_interval,
                  tau,
                  hidden_dim=64,
-                 num_nets=1,
+                 num_nets=2,
                  tau_theta=0.001,
                  gradient_steps=1,
                  train_freq=-1,
@@ -120,7 +121,7 @@ class LogULearner:
         # self.replay_buffer = ReplayBuffer(buffer_size)
         
         # Set up the logger:
-        self.logger = logger_at_folder(log_dir, algo_name='LogU')
+        self.logger = logger_at_folder(log_dir, algo_name=f'LogU{num_nets}nets')
 
         self._n_updates = 0
         self.env_steps = 0
@@ -155,7 +156,7 @@ class LogULearner:
             dones = dones.unsqueeze(1)
 
             curr_logu = torch.cat([online_logu(states).squeeze(1).gather(1,actions.long())
-                                    for online_logu in self.online_logus],dim=1)
+                                    for online_logu in self.online_logus], dim=1)
             # curr_logu = curr_logu.squeeze(1)#self.online_logu(states).squeeze(1)
             # curr_logu = curr_logu.gather(1, actions.long())
             # # Take min:
@@ -168,21 +169,26 @@ class LogULearner:
                 # new_thetas[] (min(new_theta).item())
                 new_thetas[grad_step] = torch.min(new_theta)
 
-                target_next_logu = torch.cat([target_logu(next_states) for target_logu in self.target_logus], dim=1).squeeze(1)
-                next_logu = target_next_logu.gather(1, next_actions.long())
-                next_logu = torch.min(next_logu, dim=1, keepdim=True)[0]
+                # target_next_logu = torch.cat([target_logu(next_states) for target_logu in self.target_logus], dim=1).squeeze(1)
+                target_next_logu = torch.cat([target_logu(next_states).gather(1, next_actions.long()) 
+                                              for target_logu in self.target_logus],dim=1)
+                # next_logu = target_next_logu.gather(1, next_actions.long())
+                next_logu = torch.min(target_next_logu, dim=1, keepdim=True)[0]
+                # tile next_logu to match curr_logu:
+                next_logu = next_logu.repeat(1, self.num_nets)
                 
                 expected_curr_logu = self.beta * (rewards + self.theta) + (1 - dones) * next_logu
 
                 
-            self.logger.record("theta", self.theta.item())
-            self.logger.record("avg logu", curr_logu.mean().item())
+            self.logger.record("train/theta", self.theta.item())
+            self.logger.record("train/avg logu", curr_logu.mean().item())
             # Huber loss:
             # loss = 0.5* sum([F.smooth_l1_loss(curr_logu, expected_curr_logu) for curr_logu in curr_logus])
+            # print(curr_logu.shape, expected_curr_logu.shape)
             loss = F.smooth_l1_loss(curr_logu, expected_curr_logu)
             # MSE loss:
             # loss = F.mse_loss(curr_logu, expected_curr_logu)
-            self.logger.record("loss", loss.item())
+            self.logger.record("train/loss", loss.item())
             self.optimizers.zero_grad()
             # Increase update counter
             self._n_updates += self.gradient_steps
@@ -235,8 +241,12 @@ class LogULearner:
 
                 if self.env_steps % self.target_update_interval == 0:
                     # Do a Polyak update of parameters:
-                    # polyak_update(self.online_logus.parameters(), self.target_logus.parameters(), self.tau)
+                    # polyak_update(self.online_logus.nets[0].parameters(), self.target_logus.nets[0].parameters(), self.tau)
+                    # polyak_update(self.online_logus.nets[1].parameters(), self.target_logus.nets[1].parameters(), self.tau)
+
                     self.target_logus.polyak(self.online_logus.parameters(), self.tau)
+                    # for target_logu, online_logu in zip(self.target_logus.nets, self.online_logus.nets):
+                        # polyak_update(target_logu.parameters(), online_logu.parameters(), self.tau)
 
         
                 self.env_steps += 1
@@ -258,14 +268,14 @@ class LogULearner:
                     self.eval_auc += avg_eval_rwd
                     if self.save_checkpoints:
                         torch.save(self.online_logu.state_dict(), 'sql-policy.para')
-                    self.logger.record("env. steps", self.env_steps)
+                    self.logger.record("time/env. steps", self.env_steps)
                     self.logger.record("eval/avg_reward", avg_eval_rwd)
                     self.logger.record("eval/auc", self.eval_auc)
-                    self.logger.record("num. episodes", self.num_episodes)
-                    self.logger.record("fps", fps)
+                    self.logger.record("time/num. episodes", self.num_episodes)
+                    self.logger.record("time/fps", fps)
                     self.logger.dump(step=self.env_steps)
                     t0 = time.thread_time_ns()
-                self.logger.record("Rollout reward:", self.rollout_reward)
+                    self.logger.record("rollout/reward", self.rollout_reward)
 
 
 
@@ -281,6 +291,7 @@ class LogULearner:
             done = False
             while not done:
                 action = self.online_logus.greedy_action(state)
+                # action = self.online_logus.choose_action(state)
                 # if ep == 0:
                     # self.env.render()
 
@@ -319,7 +330,7 @@ def main():
     #                     target_update_interval=150, device='cpu', gradient_steps=40, tau_theta=0.9, tau=0.75,#0.001, 
     #                     log_interval=100, hidden_dim=256)
     from hparams import cartpole_hparams0 as config
-    agent = LogULearner(env_id, **config, device='cuda', log_interval=200, num_nets=1)
+    agent = LogULearner(env_id, **config, device='cuda', log_interval=200, num_nets=2)
     # agent.learn(250_000)
     from stable_baselines3 import PPO
     # agent = PPO('MlpPolicy', env_id, verbose=1, device='cuda', tensorboard_log='tmp')

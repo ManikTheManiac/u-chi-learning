@@ -4,6 +4,7 @@ from CustomDQN import CustomDQN
 from LogURawlik import LogULearner
 from CustomPPO import CustomPPO
 # from LogU import LogULearner
+from MultiLogU import LogULearner
 from hparams import cartpole_hparams0, cartpole_dqn, cartpole_rawlik, cartpole_ppo
 import time
 

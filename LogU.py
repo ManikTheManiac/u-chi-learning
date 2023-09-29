@@ -79,7 +79,7 @@ class LogULearner:
     def train(self,):
         # replay = self.replay_buffer.sample(self.batch_size, env=self._vec_normalize_env)
         # average self.theta over multiple gradient steps
-        new_thetas = []
+        new_thetas = torch.zeros(self.gradient_steps)
         for grad_step in range(self.gradient_steps):
             replay = self.replay_buffer.sample(self.batch_size, continuous=False)
             states, next_states, actions, next_actions, rewards, dones = replay
@@ -97,7 +97,7 @@ class LogULearner:
                 ref_logu = self.online_logu(self.ref_next_state)
                 ref_chi = self.online_logu.get_chi(ref_logu)
                 new_theta = self.ref_reward - torch.log(ref_chi)
-                new_thetas.append(new_theta)
+                new_thetas[grad_step] = new_theta
 
                 target_next_logu = self.target_logu(next_states)
                 next_logu = target_next_logu.gather(1, next_actions.long())
@@ -128,8 +128,7 @@ class LogULearner:
             self.logger.record("max_grad", total_norm.item())
             self.optimizer.step()
         # self.theta = torch.mean(torch.stack(new_thetas))
-        new_thetas = torch.stack(new_thetas)
-        # new_thetas = torch.clamp(new_thetas, 0, -1)
+        # new_thetas = torch.clamp(new_thetas, 1, -1)
 
         self.theta = self.tau_theta*self.theta + (1 - self.tau_theta) * torch.mean(new_thetas)
 
@@ -238,7 +237,7 @@ class LogULearner:
 
 def main():
     env_id = 'CartPole-v1'
-    # env_id = 'Acrobot-v1'
+    env_id = 'Acrobot-v1'
     # env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
@@ -246,8 +245,8 @@ def main():
     # agent = LogULearner(env_id, beta=4, learning_rate=3e-2, batch_size=1500, buffer_size=45000, 
     #                     target_update_interval=150, device='cpu', gradient_steps=40, tau_theta=0.9, tau=0.75,#0.001, 
     #                     log_interval=100, hidden_dim=256)
-    from hparams import cartpole_hparams1 as config
-    agent = LogULearner(env_id, **config, device='cpu', log_interval=200)
+    from hparams import cartpole_hparams0 as config
+    agent = LogULearner(env_id, **config, device='cuda', log_interval=800)
     # agent.learn(250_000)
     from stable_baselines3 import PPO
     # agent = PPO('MlpPolicy', env_id, verbose=1, device='cuda', tensorboard_log='tmp')

@@ -19,6 +19,7 @@ LogU learning implementation in gym (mazes and cartpole)
 - [ ] "..." affect logu divergence? 
 - [ ] Why does using off-policy (pi0) for exploration make logu diverge?
 - [ ] Which activation function is best?
+- [ ] Which aggregration of theta is best (min/mean/max), same for logu (min is suggested to help with over-optimistic behavior)
 
 # Features requiring experiments:
 - [ ] use target or online logu for exploration (greedy or not?)

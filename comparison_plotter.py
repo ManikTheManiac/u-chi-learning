@@ -7,7 +7,7 @@ import os
 from tbparse import SummaryReader
 
 sns.set_theme(style="darkgrid")
-algo_to_log_interval = {'DQN': 500, 'PPO': 4000, 'LogU0': 500, 'RawLik': 500}
+algo_to_log_interval = {'DQN': 500, 'PPO': 4000, 'LogU0': 500, 'RawLik': 500, 'LogU2nets': 500}
 
 
 def plotter(folder, metrics=['eval/avg_reward']):
