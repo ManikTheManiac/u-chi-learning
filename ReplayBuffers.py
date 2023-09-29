@@ -3,7 +3,7 @@ import random
 import numpy as np
 import torch
 
-class Memory(object):
+class Memory:
     def __init__(self, memory_size: int, device='cpu') -> None:
         self.memory_size = memory_size
         self.device = device

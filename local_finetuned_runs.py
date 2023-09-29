@@ -2,21 +2,21 @@ import argparse
 from LogU import LogULearner
 from CustomDQN import CustomDQN
 from LogU import LogULearner
-from hparams import cartpole_hparams1, cartpole_dqn
+from hparams import cartpole_hparams0, cartpole_dqn
 
 env = 'CartPole-v1'
-configs = {'logu': cartpole_hparams1, 'dqn': cartpole_dqn}
+configs = {'logu': cartpole_hparams0, 'dqn': cartpole_dqn}
 
 def runner(algo):
     if algo == 'logu':
-        config = cartpole_hparams1
+        config = cartpole_hparams0
         algo = LogULearner
     elif algo == 'dqn':
         config = cartpole_dqn
         algo = CustomDQN
 
     model = algo(env, **config, log_dir='ft/benchmark', device='cuda', log_interval=500)
-    model.learn(total_timesteps=30_000)
+    model.learn(total_timesteps=100_000)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -25,4 +25,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     for i in range(args.count):
-        runner('dqn')
+        runner(args.algo)

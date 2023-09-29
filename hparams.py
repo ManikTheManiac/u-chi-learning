@@ -7,6 +7,7 @@ cartpole_hparams0 = {
     'target_update_interval': 70,
     'tau': 0.85,
     'tau_theta': 0.85,
+    'hidden_dim': 16,
 }
 
 cartpole_hparams1 = {
@@ -23,16 +24,16 @@ cartpole_hparams1 = {
 }
 
 cartpole_dqn = {
-    'batch_size': 560,
-    'buffer_size': 15000,
-    'exploration_final_eps': 0.037,
-    'exploration_fraction': 0.31,
-    'gamma': 0.975,
-    'gradient_steps': 8,
-    'hidden_dim': 512,
-    'learning_rate': 0.00245,
-    'learning_starts': 1500,
-    'target_update_interval': 700,
-    'tau': 0.465,
-    'train_freq': 49,
+    'batch_size': 64,
+    'buffer_size': 100000,
+    'exploration_final_eps': 0.04,
+    'exploration_fraction': 0.12,
+    'gamma': 0.99,
+    'gradient_steps': 128,
+    'hidden_dim': 256,
+    'learning_rate': 0.0023,
+    'learning_starts': 1000,
+    'target_update_interval': 10,
+    'tau': 1.0,
+    'train_freq': 256,
 }

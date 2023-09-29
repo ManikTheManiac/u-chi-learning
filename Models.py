@@ -19,7 +19,6 @@ class LogUNet(nn.Module):
         self.fc2 = nn.Linear(hidden_dim, hidden_dim, device=self.device)
         self.fc3 = nn.Linear(hidden_dim, self.nA, device=self.device)
         self.relu = nn.ReLU()
-        # self.relu = nn.LeakyReLU()
      
     def forward(self, x):
         if not isinstance(x, torch.Tensor):

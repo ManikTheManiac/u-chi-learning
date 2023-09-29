@@ -10,6 +10,7 @@ from gym.wrappers import TimeLimit
 import time
 from ReplayBuffers import Memory
 from Models import UNet
+from utils import logger_at_folder
 
 
 class LogULearner:
@@ -27,7 +28,6 @@ class LogULearner:
                  train_freq=-1,
                  max_grad_norm=10,
                  device='cpu',
-                 run_name='',
                  log_dir=None,
                  log_interval=1000,
                  save_checkpoints = False,
@@ -62,15 +62,7 @@ class LogULearner:
         # self.replay_buffer = ReplayBuffer(buffer_size)
         
         # Set up the logger:
-        if log_dir is not None:
-            run_name = str(len(os.listdir(log_dir)))
-            tmp_path = f"{log_dir}_{run_name}"
-        
-            os.makedirs(tmp_path, exist_ok=True)
-            self.logger = configure(tmp_path, ["stdout", "csv", "tensorboard"])
-        else:
-            # print the logs to stdout:
-            self.logger = configure(format_strings=["stdout", "csv", "tensorboard"])
+        self.logger = logger_at_folder(log_dir, algo_name='UV')
 
         self._n_updates = 0
         self.env_steps = 0
@@ -110,8 +102,8 @@ class LogULearner:
             with torch.no_grad():
                 ref_u = self.online_u(self.ref_next_state)
                 ref_chi = self.online_u.get_chi(ref_u)
-                new_theta = self.ref_reward - torch.log(ref_chi)
-                new_thetas.append(new_theta)
+                theta_u = self.ref_reward - torch.log(ref_chi)
+                # new_thetas.append(new_theta)
 
                 target_next_u = self.target_u(next_states)
                 next_u = target_next_u.gather(1, next_actions.long())
@@ -121,13 +113,19 @@ class LogULearner:
                 expected_curr_u = torch.exp(self.beta * (rewards + self.theta)) * (1 - dones) * next_u
 
                 expected_next_v = torch.exp(self.beta * (rewards + self.theta)) * (1 - dones) * curr_v
+                # Average e^beta r over v to get e^-beta theta:
+                theta_v = -1/self.beta * torch.log(torch.sum(torch.exp(-self.beta * rewards) * curr_v))
 
                 
             self.logger.record("theta", self.theta.item())
             self.logger.record("avg u", curr_u.mean().item())
+            self.logger.record("avg v", curr_v.mean().item())
+            self.logger.record("theta_v:", theta_v.item())
             # Huber loss:
             u_loss = F.smooth_l1_loss(curr_u, expected_curr_u)
             v_loss = F.smooth_l1_loss(next_v, expected_next_v)
+            # Weight the theta contribution based on their resp. losses:
+            new_thetas.append(theta_v * (u_loss / (u_loss + v_loss)) + theta_u * (v_loss / (u_loss + v_loss)))
             loss = u_loss + v_loss
             # MSE loss:
             # loss = F.mse_loss(curr_u, expected_curr_u)
@@ -260,7 +258,7 @@ def main():
     #                     target_update_interval=150, device='cpu', gradient_steps=40, tau_theta=0.9, tau=0.75,#0.001, 
     #                     log_interval=100, hidden_dim=256)
     from hparams import cartpole_hparams1 as config
-    agent = LogULearner(env_id, **config, log_dir='tmp', device='cuda', max_grad_norm=1, log_interval=2000)
+    agent = LogULearner(env_id, **config, device='cuda', max_grad_norm=1, log_interval=2000)
     # agent.learn(250_000)
     from stable_baselines3 import PPO
     # agent = PPO('MlpPolicy', env_id, verbose=1, device='cuda', tensorboard_log='tmp')

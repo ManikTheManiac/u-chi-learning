@@ -21,7 +21,7 @@ class CustomDQN(DQN):
     def _on_step(self) -> None:
         # Evaluate the agent and log it if step % log_interval == 0:
         if self._n_calls % self.eval_interval == 0:
-            self.eval_rwd = self.evaluate_agent()
+            self.eval_rwd = self.evaluate_agent(5)
             self.eval_auc += self.eval_rwd
             self.logger.record("eval/auc", self.eval_auc)
             self.logger.record("eval/avg_reward", self.eval_rwd)

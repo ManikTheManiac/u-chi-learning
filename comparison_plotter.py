@@ -34,6 +34,14 @@ def plotter(folder, metrics=['eval/avg_reward']):
         # filter the desired metrics:
         # strip the : from the metrics:
         df = df[df['tag'].isin(metrics)]
+        # For DQN we need to drop the first timestep:
+        if algo_name == 'DQN':
+            df = df[df['step'] != 1]
+        # first check if the correct number of timesteps:
+        n_time_steps = df['step'].nunique()
+        if n_time_steps != 200:
+            print(f'Incorrect number of timesteps ({n_time_steps}) for {subfolder}!')
+            continue
         # Add the data from the file to the new df by cat, using algo_name+num as the column name:
         algo_df = algo_to_data[algo_name]
         algo_df = pd.concat([algo_df, df], axis=1)
@@ -42,19 +50,25 @@ def plotter(folder, metrics=['eval/avg_reward']):
     plt.figure()
     # now, plot the dfs from each algo:
     for algo_name in algos:
-        data = algo_to_data[algo_name]
-        # plot with errors:
-        log_interval = 500
-        t_axis = np.arange(0, len(data) * log_interval, log_interval)
-        # take an average of the data_df:
-        means = data['value'].mean(axis=1)
-        num_runs = data['value'].shape[1]
-        stds = data['value'].std(axis=1) / np.sqrt(num_runs)
-        # plot with errors:
-        plt.plot(t_axis, means, label=algo_name)
-        plt.fill_between(t_axis, means - stds, means + stds, alpha=0.5)
+        try:
+            data = algo_to_data[algo_name]
+            # plot with errors:
+            log_interval = 500
+            t_axis = np.arange(0, len(data) * log_interval, log_interval)
+            # take an average of the data_df:
+            means = data['value'].mean(axis=1)
+            num_runs = data['value'].shape[1]
+            stds = data['value'].std(axis=1) / np.sqrt(num_runs)
+            # plot with errors:
+            plt.plot(t_axis, means, label=algo_name)
+            plt.fill_between(t_axis, means - stds, means + stds, alpha=0.5)
+        except Exception as e:
+            print(f'Failed to plot {algo_name}: {e}')
 
+        # Print how many runs were plotted:
+        print(f'Plotted {num_runs} runs for {algo_name}')
     plt.legend()
+    # plt.xlim(0, 100000)
     plt.xlabel('Environment Steps')
     plt.ylabel('Average Evaluation Reward')
     plt.savefig(f'{folder}_rwds.png')

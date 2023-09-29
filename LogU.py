@@ -61,7 +61,7 @@ class LogULearner:
         # self.replay_buffer = ReplayBuffer(buffer_size)
         
         # Set up the logger:
-        self.logger = logger_at_folder(log_dir)
+        self.logger = logger_at_folder(log_dir, algo_name='LogU')
 
         self._n_updates = 0
         self.env_steps = 0
@@ -133,7 +133,6 @@ class LogULearner:
 
         self.theta = self.tau_theta*self.theta + (1 - self.tau_theta) * torch.mean(new_thetas)
 
-    
     def learn(self, total_timesteps):
         # Start a timer to log fps:
         t0 = time.thread_time_ns()
