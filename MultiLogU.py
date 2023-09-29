@@ -128,20 +128,16 @@ class LogULearner:
         self._initialize_networks()
 
     def _initialize_networks(self):
-        # self.online_logu = LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
         self.online_logus = OnlineNets(list_of_nets=[LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device) 
                                 for _ in range(self.num_nets)])
         self.target_logus = TargetNets(list_of_nets=[LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
                                 for _ in range(self.num_nets)])
         self.target_logus.load_state_dict([logu.state_dict() for logu in self.online_logus])
-
         # Make (all) LogUs learnable:
-        # self.optimizer = torch.optim.Adam(self.online_logu.parameters(), lr=self.learning_rate)
-        opts = [torch.optim.Adam(logu.parameters(), lr=self.learning_rate)
-                            for logu in self.online_logus]
+        opts = [torch.optim.Adam(logu.parameters(), lr=self.learning_rate) for logu in self.online_logus]
         self.optimizers = Optimizers(opts)
 
-
+        
     def train(self,):
         # replay = self.replay_buffer.sample(self.batch_size, env=self._vec_normalize_env)
         # average self.theta over multiple gradient steps

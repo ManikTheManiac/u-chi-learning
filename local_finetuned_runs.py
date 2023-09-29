@@ -27,7 +27,7 @@ def runner(algo):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--count', type=int, default=1)
+    parser.add_argument('-c', '--count', type=int, default=10)
     parser.add_argument('-a', '--algo', type=str, default='ppo')
     args = parser.parse_args()
 

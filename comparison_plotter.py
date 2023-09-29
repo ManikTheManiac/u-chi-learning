@@ -20,10 +20,10 @@ def plotter(folder, metrics=['eval/avg_reward']):
             algos.append(algo_name)
             algo_to_data[algo_name] = pd.DataFrame()
 
-    # iterate through the files in the folder
-    for subfolder in os.listdir(folder):
-        # Extract algorithm name, and add it to the df:
-        algo_name = subfolder.split('_')[0]
+    # # iterate through the files in the folder
+    # for subfolder in os.listdir(folder):
+    #     # Extract algorithm name, and add it to the df:
+    #     algo_name = subfolder.split('_')[0]
         # There should be only one file in the subfolder:
         subfiles = os.listdir(f'{folder}/{subfolder}')
         # ignore csvs:
@@ -41,8 +41,8 @@ def plotter(folder, metrics=['eval/avg_reward']):
             df = df[df['tag'].isin(metrics)]
 
             # For DQN we need to drop the first timestep:
-            if algo_name == 'DQN' or algo_name == 'PPO':
-                df = df[df['step'] != 1]
+            # if algo_name == 'DQN' or algo_name == 'PPO':
+            #     df = df[df['step'] != 1]
             # first check if the correct number of timesteps:
             n_time_steps = df['step'].nunique()
             # if n_time_steps != 200:
@@ -65,6 +65,9 @@ def plotter(folder, metrics=['eval/avg_reward']):
             # log_interval = 500
             log_interval = algo_to_log_interval[algo_name]
             t_axis = np.arange(0, len(data) * log_interval, log_interval)
+            # For PPO, shift the t_axis by 4000
+            if algo_name == 'PPO':
+                t_axis += 4000
             # take an average of the data_df:
             means = data['value'].mean(axis=1)
             num_runs = data['value'].shape[1]
