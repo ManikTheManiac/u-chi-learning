@@ -1,3 +1,4 @@
+from traceback import print_tb
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -6,6 +7,8 @@ import os
 from tbparse import SummaryReader
 
 sns.set_theme(style="darkgrid")
+algo_to_log_interval = {'DQN': 500, 'PPO': 4000, 'LogU0': 500, 'RawLik': 500}
+
 
 def plotter(folder, metrics=['eval/avg_reward']):
     # First, scan the folder for the different algorithms:
@@ -33,19 +36,25 @@ def plotter(folder, metrics=['eval/avg_reward']):
         df = reader.scalars
         # filter the desired metrics:
         # strip the : from the metrics:
-        df = df[df['tag'].isin(metrics)]
-        # For DQN we need to drop the first timestep:
-        if algo_name == 'DQN':
-            df = df[df['step'] != 1]
-        # first check if the correct number of timesteps:
-        n_time_steps = df['step'].nunique()
-        if n_time_steps != 200:
-            print(f'Incorrect number of timesteps ({n_time_steps}) for {subfolder}!')
+        try:
+
+            df = df[df['tag'].isin(metrics)]
+
+            # For DQN we need to drop the first timestep:
+            if algo_name == 'DQN' or algo_name == 'PPO':
+                df = df[df['step'] != 1]
+            # first check if the correct number of timesteps:
+            n_time_steps = df['step'].nunique()
+            # if n_time_steps != 200:
+            #     print(f'Incorrect number of timesteps ({n_time_steps}) for {subfolder}!')
+            #     continue
+            # Add the data from the file to the new df by cat, using algo_name+num as the column name:
+            algo_df = algo_to_data[algo_name]
+            algo_df = pd.concat([algo_df, df], axis=1)
+            algo_to_data[algo_name] = algo_df
+        except Exception as e:
+            print(f'Failed to read {subfolder}: {e}')
             continue
-        # Add the data from the file to the new df by cat, using algo_name+num as the column name:
-        algo_df = algo_to_data[algo_name]
-        algo_df = pd.concat([algo_df, df], axis=1)
-        algo_to_data[algo_name] = algo_df
 
     plt.figure()
     # now, plot the dfs from each algo:
@@ -53,7 +62,8 @@ def plotter(folder, metrics=['eval/avg_reward']):
         try:
             data = algo_to_data[algo_name]
             # plot with errors:
-            log_interval = 500
+            # log_interval = 500
+            log_interval = algo_to_log_interval[algo_name]
             t_axis = np.arange(0, len(data) * log_interval, log_interval)
             # take an average of the data_df:
             means = data['value'].mean(axis=1)
@@ -64,7 +74,7 @@ def plotter(folder, metrics=['eval/avg_reward']):
             plt.fill_between(t_axis, means - stds, means + stds, alpha=0.5)
         except Exception as e:
             print(f'Failed to plot {algo_name}: {e}')
-
+            print_tb(e.__traceback__)
         # Print how many runs were plotted:
         print(f'Plotted {num_runs} runs for {algo_name}')
     plt.legend()

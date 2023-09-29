@@ -1,8 +1,12 @@
+import gym
 import torch
 import torch.nn as nn
 from torch.distributions import Categorical
 from stable_baselines3.common.preprocessing import preprocess_obs
 import numpy as np
+from stable_baselines3.common.distributions import SquashedDiagGaussianDistribution
+from stable_baselines3.sac.policies import Actor
+      
 
 class LogUNet(nn.Module):
     def __init__(self, env, device='cuda', hidden_dim=256):

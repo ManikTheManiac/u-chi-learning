@@ -9,6 +9,7 @@ LogU learning implementation in gym (mazes and cartpole)
         like ``(5, "step")`` or ``(2, "episode")``.
 - [x] Add gradient clipping
 - [ ] More clever normalization to avoid logu divergence
+- [ ] Merge Rawlik with LogU as an option. e.g. prior_update_interval=0 for no updates, and otherwise use Rawlik iteration
 
 # Experimental questions:
 - [ ] Why does using continuous=True in batch sampling result in nans?
