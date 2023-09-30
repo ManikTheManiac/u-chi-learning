@@ -2,9 +2,10 @@ from stable_baselines3 import PPO
 
 from utils import logger_at_folder
 
+
 class CustomPPO(PPO):
     def __init__(self, *args, log_interval=1000, hidden_dim=64, log_dir=None, **kwargs):
-        super().__init__('MlpPolicy', *args, verbose=0, **kwargs)
+        super().__init__('MlpPolicy', *args, verbose=4, **kwargs)
         self.eval_auc = 0
         self.eval_rwd = 0
         self.eval_interval = log_interval
@@ -24,10 +25,8 @@ class CustomPPO(PPO):
             self.logger.record("eval/auc", self.eval_auc)
             self.logger.record("eval/avg_reward", self.eval_rwd)
             self.logger.dump(step=self.num_timesteps)
-
-        # Do super's self._on_step:
         super().train()
-
+        self.logger.dump(step=self.num_timesteps)
 
     def evaluate_agent(self, n_episodes=1):
         # Run the current policy and return the average reward

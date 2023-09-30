@@ -11,6 +11,7 @@ from ReplayBuffers import Memory
 from Models import LogUNet
 from utils import logger_at_folder
 
+
 class Optimizers():
     def __init__(self, list_of_optimizers: list):
         self.optimizers = list_of_optimizers
@@ -23,9 +24,11 @@ class Optimizers():
         for opt in self.optimizers:
             opt.step()
 
+
 class TargetNets():
     def __init__(self, list_of_nets):
         self.nets = list_of_nets
+
     def __iter__(self):
         return iter(self.nets)
 
@@ -37,13 +40,14 @@ class TargetNets():
         for weights, new_weights in zip(self.parameters(), new_weights):
             polyak_update(new_weights, weights, tau)
 
-
     def parameters(self):
         return [net.parameters() for net in self.nets]
+
 
 class OnlineNets():
     def __init__(self, list_of_nets):
         self.nets = list_of_nets
+
     def __iter__(self):
         return iter(self.nets)
 
@@ -61,17 +65,17 @@ class OnlineNets():
         action = np.random.choice(actions)
         # perhaps re-weight this based on pessimism?
         return action.item()
-    
+
     def parameters(self):
         return [net.parameters() for net in self.nets]
-    
+
     def clip_grad_norm(self, max_grad_norm):
         for net in self.nets:
             torch.nn.utils.clip_grad_norm_(net.parameters(), max_grad_norm)
 
 
 class LogULearner:
-    def __init__(self, 
+    def __init__(self,
                  env_id,
                  beta,
                  learning_rate,
@@ -88,7 +92,7 @@ class LogULearner:
                  device='cpu',
                  log_dir=None,
                  log_interval=1000,
-                 save_checkpoints = False,
+                 save_checkpoints=False,
                  ) -> None:
         self.env = gym.make(env_id)
         # make another instance for evaluation purposes only:
@@ -110,7 +114,7 @@ class LogULearner:
         self.train_freq = train_freq
         self.max_grad_norm = max_grad_norm
         self.num_nets = num_nets
-        
+
         self.replay_buffer = Memory(buffer_size, device=device)
         self.ref_action = None
         self.ref_state = None
@@ -119,31 +123,34 @@ class LogULearner:
         self.eval_auc = 0
         self.num_episodes = 0
         # self.replay_buffer = ReplayBuffer(buffer_size)
-        
+
         # Set up the logger:
-        self.logger = logger_at_folder(log_dir, algo_name=f'LogU{num_nets}nets')
+        self.logger = logger_at_folder(
+            log_dir, algo_name=f'LogU{num_nets}nets')
 
         self._n_updates = 0
         self.env_steps = 0
         self._initialize_networks()
 
     def _initialize_networks(self):
-        self.online_logus = OnlineNets(list_of_nets=[LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device) 
-                                for _ in range(self.num_nets)])
+        self.online_logus = OnlineNets(list_of_nets=[LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
+                                                     for _ in range(self.num_nets)])
         self.target_logus = TargetNets(list_of_nets=[LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
-                                for _ in range(self.num_nets)])
-        self.target_logus.load_state_dict([logu.state_dict() for logu in self.online_logus])
+                                                     for _ in range(self.num_nets)])
+        self.target_logus.load_state_dict(
+            [logu.state_dict() for logu in self.online_logus])
         # Make (all) LogUs learnable:
-        opts = [torch.optim.Adam(logu.parameters(), lr=self.learning_rate) for logu in self.online_logus]
+        opts = [torch.optim.Adam(logu.parameters(), lr=self.learning_rate)
+                for logu in self.online_logus]
         self.optimizers = Optimizers(opts)
 
-        
     def train(self,):
         # replay = self.replay_buffer.sample(self.batch_size, env=self._vec_normalize_env)
         # average self.theta over multiple gradient steps
         new_thetas = torch.zeros(self.gradient_steps)
         for grad_step in range(self.gradient_steps):
-            replay = self.replay_buffer.sample(self.batch_size, continuous=False)
+            replay = self.replay_buffer.sample(
+                self.batch_size, continuous=False)
             states, next_states, actions, next_actions, rewards, dones = replay
 
             actions = actions.unsqueeze(1)
@@ -151,31 +158,25 @@ class LogULearner:
             rewards = rewards.unsqueeze(1)
             dones = dones.unsqueeze(1)
 
-            curr_logu = torch.cat([online_logu(states).squeeze(1).gather(1,actions.long())
-                                    for online_logu in self.online_logus], dim=1)
-            # curr_logu = curr_logu.squeeze(1)#self.online_logu(states).squeeze(1)
-            # curr_logu = curr_logu.gather(1, actions.long())
-            # # Take min:
-            # curr_logu = torch.min(curr_logu, dim=0)[0]
-
+            curr_logu = torch.cat([online_logu(states).squeeze(1).gather(1, actions.long())
+                                   for online_logu in self.online_logus], dim=1)
             with torch.no_grad():
-                ref_logu = [logu(self.ref_next_state) for logu in self.online_logus]
-                ref_chi = torch.stack([logu.get_chi(ref_logu_val) for ref_logu_val, logu in zip(ref_logu, self.online_logus)])
+                ref_logu = [logu(self.ref_next_state)
+                            for logu in self.online_logus]
+                ref_chi = torch.stack([logu.get_chi(
+                    ref_logu_val) for ref_logu_val, logu in zip(ref_logu, self.online_logus)])
                 new_theta = self.ref_reward - torch.log(ref_chi)
-                # new_thetas[] (min(new_theta).item())
                 new_thetas[grad_step] = torch.min(new_theta)
+                target_next_logu = torch.cat([target_logu(next_states).gather(1, next_actions.long())
+                                              for target_logu in self.target_logus], dim=1)
 
-                # target_next_logu = torch.cat([target_logu(next_states) for target_logu in self.target_logus], dim=1).squeeze(1)
-                target_next_logu = torch.cat([target_logu(next_states).gather(1, next_actions.long()) 
-                                              for target_logu in self.target_logus],dim=1)
-                # next_logu = target_next_logu.gather(1, next_actions.long())
                 next_logu = torch.min(target_next_logu, dim=1, keepdim=True)[0]
                 # tile next_logu to match curr_logu:
                 next_logu = next_logu.repeat(1, self.num_nets)
-                
-                expected_curr_logu = self.beta * (rewards + self.theta) + (1 - dones) * next_logu
 
-                
+                expected_curr_logu = self.beta * \
+                    (rewards + self.theta) + (1 - dones) * next_logu
+
             self.logger.record("train/theta", self.theta.item())
             self.logger.record("train/avg logu", curr_logu.mean().item())
             # Huber loss:
@@ -188,7 +189,7 @@ class LogULearner:
             self.optimizers.zero_grad()
             # Increase update counter
             self._n_updates += self.gradient_steps
-            
+
             # Clip gradient norm
             loss.backward()
             self.online_logus.clip_grad_norm(self.max_grad_norm)
@@ -200,10 +201,10 @@ class LogULearner:
             #             ))
             # self.logger.record("max_grad", total_norm.item())
             self.optimizers.step()
-        # self.theta = torch.mean(torch.stack(new_thetas))
         # new_thetas = torch.clamp(new_thetas, 0, -1)
 
-        self.theta = self.tau_theta*self.theta + (1 - self.tau_theta) * torch.mean(new_thetas)
+        self.theta = self.tau_theta*self.theta + \
+            (1 - self.tau_theta) * torch.mean(new_thetas)
 
     def learn(self, total_timesteps):
         # Start a timer to log fps:
@@ -230,30 +231,26 @@ class LogULearner:
                     self.ref_reward = reward
                     self.ref_next_state = next_state
 
-                #TODO: Shorten this: (?)
+                # TODO: Shorten this: (?)
                 if (self.train_freq == -1 and done) or (self.train_freq != -1 and self.env_steps % self.train_freq == 0):
-                    if self.replay_buffer.size() > self.batch_size: # or learning_starts?
+                    if self.replay_buffer.size() > self.batch_size:  # or learning_starts?
                         self.train()
 
                 if self.env_steps % self.target_update_interval == 0:
                     # Do a Polyak update of parameters:
-                    # polyak_update(self.online_logus.nets[0].parameters(), self.target_logus.nets[0].parameters(), self.tau)
-                    # polyak_update(self.online_logus.nets[1].parameters(), self.target_logus.nets[1].parameters(), self.tau)
+                    self.target_logus.polyak(
+                        self.online_logus.parameters(), self.tau)
 
-                    self.target_logus.polyak(self.online_logus.parameters(), self.tau)
-                    # for target_logu, online_logu in zip(self.target_logus.nets, self.online_logus.nets):
-                        # polyak_update(target_logu.parameters(), online_logu.parameters(), self.tau)
-
-        
                 self.env_steps += 1
                 next_action = self.online_logus.choose_action(next_state)
                 # next_action = self.env.action_space.sample()
 
                 episode_reward += reward
-                self.replay_buffer.add((state, next_state, action, next_action, reward, done))
+                self.replay_buffer.add(
+                    (state, next_state, action, next_action, reward, done))
                 state = next_state
                 action = next_action
-                
+
                 if self.env_steps % self.log_interval == 0:
                     # end timer:
                     t_final = time.thread_time_ns()
@@ -263,7 +260,8 @@ class LogULearner:
                     avg_eval_rwd = self.evaluate()
                     self.eval_auc += avg_eval_rwd
                     if self.save_checkpoints:
-                        torch.save(self.online_logu.state_dict(), 'sql-policy.para')
+                        torch.save(self.online_logu.state_dict(),
+                                   'sql-policy.para')
                     self.logger.record("time/env. steps", self.env_steps)
                     self.logger.record("eval/avg_reward", avg_eval_rwd)
                     self.logger.record("eval/auc", self.eval_auc)
@@ -273,15 +271,9 @@ class LogULearner:
                     t0 = time.thread_time_ns()
                     self.logger.record("rollout/reward", self.rollout_reward)
 
-
-
     def evaluate(self, n_episodes=5):
         # run the current policy and return the average reward
         avg_reward = 0.
-        # Wrap a timelimit:
-        # self.eval_env = TimeLimit(self.eval_env, max_episode_steps=500)
-        # move to cpu for evaluation:
-        # self.eval_env = self.eval_env.to('cpu')
         for ep in range(n_episodes):
             state = self.eval_env.reset()
             done = False
@@ -289,7 +281,7 @@ class LogULearner:
                 action = self.online_logus.greedy_action(state)
                 # action = self.online_logus.choose_action(state)
                 # if ep == 0:
-                    # self.env.render()
+                # self.env.render()
 
                 next_state, reward, done, _ = self.eval_env.step(action)
 
@@ -298,7 +290,7 @@ class LogULearner:
         avg_reward /= n_episodes
         self.eval_env.close()
         return avg_reward
-    
+
     @property
     def _evec_values(self):
         if isinstance(self.env.observation_space, gym.spaces.Discrete):
@@ -310,10 +302,12 @@ class LogULearner:
                 for a in range(nA):
                     with torch.no_grad():
                         logu_ = self.online_logu(s_dev).cpu().squeeze(0)
-                        logu[s,a] = logu_[a].numpy()
+                        logu[s, a] = logu_[a].numpy()
         else:
-            raise NotImplementedError("Can only provide left e.v. for discrete state spaces.")
+            raise NotImplementedError(
+                "Can only provide left e.v. for discrete state spaces.")
         return np.exp(logu)
+
 
 def main():
     env_id = 'CartPole-v1'
@@ -322,21 +316,10 @@ def main():
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
-    # agent = LogULearner(env_id, beta=4, learning_rate=3e-2, batch_size=1500, buffer_size=45000, 
-    #                     target_update_interval=150, device='cpu', gradient_steps=40, tau_theta=0.9, tau=0.75,#0.001, 
-    #                     log_interval=100, hidden_dim=256)
     from hparams import cartpole_hparams0 as config
-    agent = LogULearner(env_id, **config, device='cuda', log_interval=200, num_nets=2)
-    # agent.learn(250_000)
-    from stable_baselines3 import PPO
-    # agent = PPO('MlpPolicy', env_id, verbose=1, device='cuda', tensorboard_log='tmp')
+    agent = LogULearner(env_id, **config, device='cuda',
+                        log_interval=200, num_nets=2)
     agent.learn(total_timesteps=50_000)
-    # print(f'Theta: {agent.theta}')
-    # print(agent._evec_values)
-    # pi = agent._evec_values.reshape((16,4))
-    # pi /= np.sum(pi, axis=1, keepdims=True)
-    # desc = np.array(desc, dtype='c')
-    # plot_dist(desc, pi, titles=['LogU'], filename='logu.png')
 
 
 if __name__ == '__main__':
