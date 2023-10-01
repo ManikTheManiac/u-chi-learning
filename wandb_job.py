@@ -35,14 +35,14 @@ def wandb_agent():
         runner(dict_cfg, run=run)
 
 
+
 if __name__ == "__main__":
-    entity = "jacobhadamczyk"
-    project = "LogU-Cartpole"
-    sweep_id = "i314e03g"
+    with open('wandb_config.txt', 'r') as f:
+        entity, project, sweep_id = f.read().splitlines()
     # Parse the "algo" argument
     parser = argparse.ArgumentParser()
     # parser.add_argument("-hd", "--hidden_dim", type=int, default=256)
-    parser.add_argument("-c", "--count", type=int, default=100)
+    parser.add_argument("-c", "--count", type=int, default=2)
 
     args = parser.parse_args()
 
