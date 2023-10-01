@@ -1,9 +1,6 @@
 import argparse
 import wandb
-import gym
 from LogU import LogULearner
-from gym.wrappers import Monitor
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor, VecVideoRecorder
 
 env_id = 'CartPole-v1'
 
@@ -36,17 +33,15 @@ def wandb_agent():
 
 
 if __name__ == "__main__":
-    entity = "jacobhadamczyk"
-    project = "LogU-Cartpole"
-    sweep_id = "i314e03g"
     # Parse the "algo" argument
     parser = argparse.ArgumentParser()
     # parser.add_argument("-hd", "--hidden_dim", type=int, default=256)
     parser.add_argument("-c", "--count", type=int, default=100)
-
+    parser.add_argument("--entity", type=str, default="jacobhadamczyk")
+    parser.add_argument("--project", type=str, default="LogU-Cartpole")
+    parser.add_argument("--sweep_id", type=str, default="i314e03g")
     args = parser.parse_args()
-
-    full_sweep_id = f"{entity}/{project}/{sweep_id}"
+    full_sweep_id = f"{args.entity}/{args.project}/{args.sweep_id}"
 
     # Before calling the agent on this full_sweep_id, make sure it exists (i.e. the project and sweep):
     # test_sweep_existence(full_sweep_id)
