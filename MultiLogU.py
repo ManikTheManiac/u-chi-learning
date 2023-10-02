@@ -10,7 +10,9 @@ import time
 from ReplayBuffers import Memory, SB3Memory
 from Models import LogUNet, OnlineNets, Optimizers, TargetNets
 from utils import logger_at_folder
-
+# raise warning level for debugger:
+import warnings
+warnings.filterwarnings("error")
 
 
 class LogULearner:
@@ -158,16 +160,16 @@ class LogULearner:
             if self.env_steps == 0:
                 self.ref_state = state
             episode_reward = 0
-            done = False
+            terminated = False
             # Random choice:
             action = self.online_logus.choose_action(state)
 
             self.num_episodes += 1
             self.rollout_reward = 0
-            while not done:
+            while not terminated:
                 # take a random action:
                 # action = self.env.action_space.sample()
-                next_state, reward, done, terminated, infos = self.env.step(action)
+                next_state, reward, terminated, truncated, infos = self.env.step(action)
                 self.rollout_reward += reward
                 if self.env_steps == 0:
                     self.ref_action = action
@@ -175,7 +177,7 @@ class LogULearner:
                     self.ref_next_state = next_state
 
                 # TODO: Shorten this: (?)
-                if (self.train_freq == -1 and done) or (self.train_freq != -1 and self.env_steps % self.train_freq == 0):
+                if (self.train_freq == -1 and terminated) or (self.train_freq != -1 and self.env_steps % self.train_freq == 0):
                     if self.replay_buffer.size() > self.batch_size:  # or learning_starts?
                         self.train()
 
@@ -189,7 +191,7 @@ class LogULearner:
 
                 episode_reward += reward
                 self.replay_buffer.add(
-                    state, next_state, action, next_action, reward, done)
+                    state, next_state, action, next_action, reward, terminated)
                 state = next_state
                 action = next_action
                 if self.env_steps % self.log_interval == 0:
@@ -218,13 +220,14 @@ class LogULearner:
         for ep in range(n_episodes):
             state, _ = self.eval_env.reset()
             terminated = False
-            while not terminated:
+            truncated = False
+            while not (terminated or truncated):
                 action = self.online_logus.greedy_action(state)
                 # action = self.online_logus.choose_action(state)
                 # if ep == 0:
                 #     self.env.render()
 
-                next_state, reward, done, terminated, info = self.eval_env.step(action)
+                next_state, reward, terminated, truncated, info = self.eval_env.step(action)
                 avg_reward += reward
                 state = next_state
         avg_reward /= n_episodes
