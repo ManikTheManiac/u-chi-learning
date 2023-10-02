@@ -1,8 +1,9 @@
 import argparse
 import wandb
-from LogU import LogULearner
+from MultiLogU import LogULearner
 
-env_id = 'CartPole-v1'
+# env_id = 'CartPole-v1'
+env_id = 'MountainCar-v0'
 
 
 def runner(config=None, run=None):
@@ -15,8 +16,8 @@ def runner(config=None, run=None):
     runs_per_hparam = 3
     auc = 0
     for _ in range(runs_per_hparam):
-        model = LogULearner(env_id, **config, log_interval=500, device='cuda')
-        model.learn_online(total_timesteps=30_000)
+        model = LogULearner(env_id, **config, log_interval=5000, device='cuda')
+        model.learn(total_timesteps=100_000)
         auc += model.eval_auc
     auc /= runs_per_hparam
     wandb.log({'avg_eval_auc': auc})
@@ -39,7 +40,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--count", type=int, default=100)
     parser.add_argument("--entity", type=str, default="jacobhadamczyk")
     parser.add_argument("--project", type=str, default="LogU-Cartpole")
-    parser.add_argument("--sweep_id", type=str, default="i314e03g")
+    parser.add_argument("--sweep_id", type=str, default="ynz7zay1")
     args = parser.parse_args()
     full_sweep_id = f"{args.entity}/{args.project}/{args.sweep_id}"
 
