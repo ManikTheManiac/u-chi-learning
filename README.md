@@ -35,6 +35,15 @@ LogU learning implementation in gym (mazes and cartpole)
 - [x] UV learning
 - [ ] Rawlik scheme
 
+# Notes:
+- I had to change this in SB3 code to allow for next_actions in replay buffer
+class ReplayBufferSamples(NamedTuple):
+    observations: th.Tensor
+    actions: th.Tensor
+    next_observations: th.Tensor
+    next_actions: th.Tensor
+    dones: th.Tensor
+    rewards: th.Tensor
 
 Model-based ground truth comparisons with tabular algorithms:
 

@@ -77,3 +77,16 @@ cartpole_dqn = {
     'tau': 1.0,
     'train_freq': 256,
 }
+
+acrobot_logu = {
+    'beta': 0.25,
+    'batch_size': 256,
+    'buffer_size': 50_000,
+    'gradient_steps': 4,
+    'learning_rate': 3.e-2,
+    'target_update_interval': 1025,
+    'tau': 0.7,
+    'tau_theta': 0.7,
+    'train_freq': 50,
+    'hidden_dim': 128,
+}

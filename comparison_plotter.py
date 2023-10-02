@@ -58,7 +58,7 @@ def plotter(folder, metrics=['step', 'eval/avg_reward']):
     plt.legend()
     # plt.xlim(0, 100000)
     plt.xlabel('Environment Steps')
-    plt.ylabel('Average Evaluation Reward')
+    plt.ylabel(metrics[1])
     # Use the y value as the filename, but strip before the first slash:
     try:
         name = metrics[1].split('/')[1]
@@ -71,7 +71,11 @@ def plotter(folder, metrics=['step', 'eval/avg_reward']):
 if __name__ == '__main__':
     # plotter('ft/benchmark/cartpole')
     # plotter('ft/benchmark/mountaincar')
-    plotter(folder='comparison', metrics=['step', 'time/fps', 'fps'])
-    plotter(folder='comparison')
-    plotter(folder='comparison', metrics=['step', 'train/theta', 'theta'])
-    plotter(folder='comparison', metrics=['step', 'train/avg logu', 'avg logu'])
+
+    folder = 'ft/acro'
+    folder = 'comparison'
+    # plotter(folder=folder, metrics=['step', 'time/fps', 'fps'])
+    plotter(folder=folder)
+    # plotter(folder=folder, metrics=['step', 'rollout/reward'])
+    # plotter(folder=folder, metrics=['step', 'train/theta', 'theta'])
+    # plotter(folder=folder, metrics=['step', 'train/avg logu', 'avg logu'])

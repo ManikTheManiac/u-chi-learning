@@ -102,8 +102,9 @@ class LogULearner:
             replay = self.replay_buffer.sample(self.batch_size)
             states, actions, next_states, next_actions, dones, rewards = replay
 
-            curr_logu = torch.cat([online_logu(states).gather(1, actions.long())
+            curr_logu = torch.cat([online_logu(states).squeeze().gather(1, actions.long())
                                    for online_logu in self.online_logus], dim=1)
+            # curr_logu = torch.clamp(curr_logu, -20, 20)
             with torch.no_grad():
                 ref_logu = [logu(self.ref_next_state) for logu in self.online_logus]
                 # ref_chi = torch.stack([logu.get_chi(
@@ -113,7 +114,7 @@ class LogULearner:
                                        for ref_logu_val in ref_logu], dim=-1)
                 new_theta = self.ref_reward - torch.log(ref_chi)
                 new_thetas[grad_step] = torch.min(new_theta,dim=-1)[0]
-                target_next_logu = torch.cat([target_logu(next_states).gather(1, next_actions.long())
+                target_next_logu = torch.cat([target_logu(next_states).squeeze().gather(1, next_actions.long())
                                               for target_logu in self.target_logus], dim=1)
 
                 next_logu, _ = torch.min(target_next_logu, dim=1, keepdim=True)
@@ -123,6 +124,9 @@ class LogULearner:
 
                 expected_curr_logu = self.beta * \
                     (rewards + self.theta) + (1 - dones) * next_logu
+                # Clip to -15,15:
+                # expected_curr_logu = torch.clamp(
+                #     expected_curr_logu, -20, 20)
 
             self.logger.record("train/theta", self.theta.item())
             self.logger.record("train/avg logu", curr_logu.mean().item())
@@ -161,12 +165,13 @@ class LogULearner:
                 self.ref_state = state
             episode_reward = 0
             terminated = False
+            truncated = False
             # Random choice:
             action = self.online_logus.choose_action(state)
 
             self.num_episodes += 1
             self.rollout_reward = 0
-            while not terminated:
+            while not (terminated or truncated):
                 # take a random action:
                 # action = self.env.action_space.sample()
                 next_state, reward, terminated, truncated, infos = self.env.step(action)
@@ -260,7 +265,7 @@ def main():
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
     from hparams import cartpole_hparams0 as config
-    agent = LogULearner(env_id, **config, device='cpu', num_nets=1, log_dir='comparison')
+    agent = LogULearner(env_id, **config, device='cpu', num_nets=2, log_dir='comparison')
     agent.learn(total_timesteps=50_000)
 
 
