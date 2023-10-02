@@ -74,8 +74,8 @@ if __name__ == '__main__':
 
     folder = 'ft/acro'
     folder = 'comparison'
-    # plotter(folder=folder, metrics=['step', 'time/fps', 'fps'])
+    plotter(folder=folder, metrics=['step', 'time/fps', 'fps'])
     plotter(folder=folder)
-    # plotter(folder=folder, metrics=['step', 'rollout/reward'])
-    # plotter(folder=folder, metrics=['step', 'train/theta', 'theta'])
-    # plotter(folder=folder, metrics=['step', 'train/avg logu', 'avg logu'])
+    plotter(folder=folder, metrics=['step', 'rollout/reward'])
+    plotter(folder=folder, metrics=['step', 'train/theta', 'theta'])
+    plotter(folder=folder, metrics=['step', 'train/avg logu', 'avg logu'])

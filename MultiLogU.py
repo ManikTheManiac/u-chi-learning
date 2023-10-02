@@ -5,7 +5,7 @@ import numpy as np
 from stable_baselines3.common.vec_env import unwrap_vec_normalize
 import os
 from torch.nn import functional as F
-from gym.wrappers import TimeLimit
+from gymnasium.wrappers import TimeLimit
 import time
 from ReplayBuffers import Memory, SB3Memory
 from Models import LogUNet, OnlineNets, Optimizers, TargetNets
@@ -37,7 +37,7 @@ class LogULearner:
                  ) -> None:
         self.env = gym.make(env_id)
         # timelimit:
-        # self.env = TimeLimit(self.env, max_episode_steps=500)
+        self.env = TimeLimit(self.env, max_episode_steps=500)
         # make another instance for evaluation purposes only:
         self.eval_env = gym.make(env_id)
         # self.eval_env = TimeLimit(self.eval_env, max_episode_steps=500)
@@ -230,7 +230,7 @@ class LogULearner:
                 action = self.online_logus.greedy_action(state)
                 # action = self.online_logus.choose_action(state)
                 # if ep == 0:
-                #     self.env.render()
+                # self.env.render()
 
                 next_state, reward, terminated, truncated, info = self.eval_env.step(action)
                 avg_reward += reward
@@ -259,13 +259,15 @@ class LogULearner:
 
 def main():
     env_id = 'CartPole-v1'
-    # env_id = 'Acrobot-v1'
+    # env_id = 'Taxi-v3'
+    # env_id = 'CliffWalking-v0'
+    env_id = 'Acrobot-v1'
     # env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
     from hparams import cartpole_hparams0 as config
-    agent = LogULearner(env_id, **config, device='cpu', num_nets=2, log_dir='comparison')
+    agent = LogULearner(env_id, **config, device='cpu', num_nets=2)
     agent.learn(total_timesteps=50_000)
 
 
