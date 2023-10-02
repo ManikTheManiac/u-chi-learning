@@ -9,7 +9,7 @@ from hparams import cartpole_hparams0, cartpole_dqn, cartpole_rawlik, cartpole_p
 import time
 
 env = 'CartPole-v1'
-env = 'MountainCar-v0'
+# env = 'MountainCar-v0'
 configs = {'logu': cartpole_hparams0, 'dqn': cartpole_dqn}
 
 
@@ -28,15 +28,15 @@ def runner(algo):
         config = cartpole_ppo
         algo = CustomPPO
 
-    model = algo(env, **config, log_dir='ft/benchmark/mountaincar',
+    model = algo(env, **config, log_dir='ft/cartpole',
                  device='cpu', log_interval=500, num_nets=1)
-    model.learn(total_timesteps=100_000)
+    model.learn(total_timesteps=5_000)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--count', type=int, default=10)
-    parser.add_argument('-a', '--algo', type=str, default='ppo')
+    parser.add_argument('-c', '--count', type=int, default=1)
+    parser.add_argument('-a', '--algo', type=str, default='logu')
     args = parser.parse_args()
 
     start = time.time()

@@ -8,6 +8,8 @@ cartpole_hparams0 = {
     'tau': 0.85,
     'tau_theta': 0.85,
     'hidden_dim': 16,
+    'train_freq': 50,
+    'log_interval': 1000
 }
 
 mcar_hparams = {
@@ -49,15 +51,15 @@ cartpole_ppo = {
 }
 
 cartpole_hparams1 = {
-    'beta': 2.0,
-    'batch_size': 630,
-    'buffer_size': 14000,
-    'gradient_steps': 11,
+    'beta': 1.0,
+    'batch_size': 256,
+    'buffer_size': 10_000,
+    'gradient_steps': 4,
     'learning_rate': 3.6e-3,
     'target_update_interval': 125,
-    'tau': 0.82,
-    'tau_theta': 0.52,
-    'train_freq': 17,
+    'tau': 0.7,
+    'tau_theta': 0.7,
+    'train_freq': 1,
     'hidden_dim': 512,
 }
 

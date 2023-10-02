@@ -16,14 +16,16 @@ def plotter(folder, metrics=['step', 'eval/avg_reward']):
     algos = []
     plt.figure()
     algo_data = pd.DataFrame()
-    for subfolder in os.listdir(folder):
+    subfolders = os.listdir(folder)
+    # Remove pngs
+    subfolders = [f for f in subfolders if not f.endswith('.png')]
+    for subfolder in subfolders:
         algo_name = subfolder.split('_')[0]
         if algo_name not in algos:
             algos.append(algo_name)
-
+        
         subfiles = os.listdir(f'{folder}/{subfolder}')
         # ignore csvs:
-        subfiles = [f for f in subfiles if not f.endswith('.csv')]
         file = subfiles[0]
 
         # Convert the tensorboard file to a pandas dataframe:
@@ -50,14 +52,26 @@ def plotter(folder, metrics=['step', 'eval/avg_reward']):
             continue
     # Now, plot the algo_data:
     sns.lineplot(data=algo_data, x='step', y='value', hue='algo')
+    # Append the number of runs to the legend for each algo:
+    for algo in algos:
+        plt.plot([], [], ' ', label=f'{algo} ({len(algo_data[algo_data["algo"] == algo]["run"].unique())} runs)')
     plt.legend()
     # plt.xlim(0, 100000)
     plt.xlabel('Environment Steps')
     plt.ylabel('Average Evaluation Reward')
-    plt.savefig(f'{folder}_rwds.png')
-    # plt.show()
+    # Use the y value as the filename, but strip before the first slash:
+    try:
+        name = metrics[1].split('/')[1]
+    except:
+        name = metrics[1]
+
+    plt.savefig(f'{folder}/{name}.png')
 
 
 if __name__ == '__main__':
-    plotter('ft/benchmark/cartpole')
-    plotter('ft/benchmark/mountaincar')
+    # plotter('ft/benchmark/cartpole')
+    # plotter('ft/benchmark/mountaincar')
+    plotter(folder='comparison', metrics=['step', 'time/fps', 'fps'])
+    plotter(folder='comparison')
+    plotter(folder='comparison', metrics=['step', 'train/theta', 'theta'])
+    plotter(folder='comparison', metrics=['step', 'train/avg logu', 'avg logu'])

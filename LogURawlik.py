@@ -270,7 +270,7 @@ class LogULearner:
                 self.logger.record("Rollout reward:", self.rollout_reward)
 
 
-    def evaluate(self, n_episodes=5):
+    def evaluate(self, n_episodes=1):
         # run the current policy and return the average reward
         avg_reward = 0.
         # Wrap a timelimit:
@@ -283,7 +283,7 @@ class LogULearner:
             while not done:
                 action = self.online_logu.choose_action(state, greedy=True)
                 # if ep == 0:
-                    # self.env.render()
+                # self.env.render()
 
                 next_state, reward, done, _ = self.eval_env.step(action)
 
@@ -295,8 +295,9 @@ class LogULearner:
     
 def main():
     env = 'CartPole-v1'
-    from hparams import cartpole_hparams0 as config
-    agent = LogULearner(env, **config, log_interval=500, prior_update_interval=1000)
+    env = 'LunarLander-v2'
+    from hparams import cartpole_rawlik as config
+    agent = LogULearner(env, **config, log_interval=1500)
     agent.learn(5000_000)
 
 
