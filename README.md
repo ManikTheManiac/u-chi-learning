@@ -36,7 +36,7 @@ LogU learning implementation in gym (mazes and cartpole)
 - [ ] Rawlik scheme
 
 # Notes:
-- I had to change this in SB3 code to allow for next_actions in replay buffer
+- I had to change this in SB3 code to allow for next_actions in replay buffer (stable_baselines3.common.type_aliases)
 class ReplayBufferSamples(NamedTuple):
     observations: th.Tensor
     actions: th.Tensor

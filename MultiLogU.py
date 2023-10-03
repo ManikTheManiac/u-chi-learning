@@ -13,6 +13,7 @@ from utils import logger_at_folder
 # raise warning level for debugger:
 import warnings
 warnings.filterwarnings("error")
+from stable_baselines3.common.utils import polyak_update
 
 
 class LogULearner:
@@ -102,13 +103,8 @@ class LogULearner:
             replay = self.replay_buffer.sample(self.batch_size)
             states, actions, next_states, next_actions, dones, rewards = replay
 
-            curr_logu = torch.cat([online_logu(states).squeeze().gather(1, actions.long())
-                                   for online_logu in self.online_logus], dim=1)
-            # curr_logu = torch.clamp(curr_logu, -20, 20)
             with torch.no_grad():
                 ref_logu = [logu(self.ref_next_state) for logu in self.online_logus]
-                # ref_chi = torch.stack([logu.get_chi(
-                #     ref_logu_val) for ref_logu_val, logu in zip(ref_logu, self.online_logus)],dim=-1)
                 # since pi0 is same for all, just do exp(ref_logu) and sum over actions:
                 ref_chi = torch.stack([torch.exp(ref_logu_val).sum(dim=-1)
                                        for ref_logu_val in ref_logu], dim=-1)
@@ -117,21 +113,21 @@ class LogULearner:
                 target_next_logu = torch.cat([target_logu(next_states).squeeze().gather(1, next_actions.long())
                                               for target_logu in self.target_logus], dim=1)
 
-                next_logu, _ = torch.min(target_next_logu, dim=1, keepdim=True)
-
-                # tile next_logu to match curr_logu:
-                next_logu = next_logu.repeat(1, self.num_nets)
-
+                next_logu, _ = torch.min(target_next_logu, dim=-1, keepdim=True)
+          
                 expected_curr_logu = self.beta * \
                     (rewards + self.theta) + (1 - dones) * next_logu
-                # Clip to -15,15:
-                # expected_curr_logu = torch.clamp(
-                #     expected_curr_logu, -20, 20)
+                expected_curr_logu = expected_curr_logu.squeeze(1)
 
+            curr_logu = torch.cat([online_logu(states).squeeze().gather(1, actions.long())
+                                   for online_logu in self.online_logus], dim=1)
+            
             self.logger.record("train/theta", self.theta.item())
             self.logger.record("train/avg logu", curr_logu.mean().item())
+            # print(curr_logu.shape)
+            # print(expected_curr_logu.shape)
             # Huber loss:
-            loss = F.smooth_l1_loss(curr_logu, expected_curr_logu)
+            loss = 0.5*sum(F.smooth_l1_loss(logu, expected_curr_logu) for logu in curr_logu.T)
             # MSE loss:
             # loss = F.mse_loss(curr_logu, expected_curr_logu)
             self.logger.record("train/loss", loss.item())
@@ -164,17 +160,17 @@ class LogULearner:
             if self.env_steps == 0:
                 self.ref_state = state
             episode_reward = 0
-            terminated = False
-            truncated = False
+            done = False
             # Random choice:
             action = self.online_logus.choose_action(state)
 
             self.num_episodes += 1
             self.rollout_reward = 0
-            while not (terminated or truncated):
+            while not done:
                 # take a random action:
                 # action = self.env.action_space.sample()
                 next_state, reward, terminated, truncated, infos = self.env.step(action)
+                done = terminated or truncated
                 self.rollout_reward += reward
                 if self.env_steps == 0:
                     self.ref_action = action
@@ -188,8 +184,11 @@ class LogULearner:
 
                 if self.env_steps % self.target_update_interval == 0:
                     # Do a Polyak update of parameters:
-                    self.target_logus.polyak(
-                        self.online_logus.parameters(), self.tau)
+                    # self.target_logus.polyak(
+                    #     self.online_logus.parameters(), self.tau)
+                    # loop thru the nets and do polyak:
+                    polyak_update(self.online_logus.nets[0].parameters(), self.target_logus.nets[0].parameters(), self.tau)
+                    polyak_update( self.online_logus.nets[1].parameters(), self.target_logus.nets[1].parameters(), self.tau)
 
                 self.env_steps += 1
                 next_action = self.online_logus.choose_action(next_state)
@@ -219,24 +218,25 @@ class LogULearner:
                     t0 = time.thread_time_ns()
                     self.logger.record("rollout/reward", self.rollout_reward)
 
-    def evaluate(self, n_episodes=5):
+    def evaluate(self, n_episodes=1):
         # run the current policy and return the average reward
         avg_reward = 0.
         for ep in range(n_episodes):
             state, _ = self.eval_env.reset()
-            terminated = False
-            truncated = False
-            while not (terminated or truncated):
+            done = False
+            while not done:
                 action = self.online_logus.greedy_action(state)
                 # action = self.online_logus.choose_action(state)
                 # if ep == 0:
-                # self.env.render()
+                # self.eval_env.render()
 
                 next_state, reward, terminated, truncated, info = self.eval_env.step(action)
                 avg_reward += reward
                 state = next_state
+                done = terminated or truncated
+            # self.eval_env.close()
+
         avg_reward /= n_episodes
-        self.eval_env.close()
         return avg_reward
 
     @property
@@ -267,8 +267,8 @@ def main():
     # env_id = 'FrozenLake-v1'
     env_id = 'MountainCar-v0'
     from hparams import mcar_hparams as config
-    agent = LogULearner(env_id, **config, device='cpu', num_nets=1)
-    agent.learn(total_timesteps=50_000)
+    agent = LogULearner(env_id, **config, device='cpu', log_dir='multinasium', num_nets=2)
+    agent.learn(total_timesteps=500_000)
 
 
 if __name__ == '__main__':

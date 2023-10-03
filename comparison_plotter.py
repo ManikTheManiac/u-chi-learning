@@ -73,8 +73,8 @@ if __name__ == '__main__':
     # plotter('ft/benchmark/mountaincar')
 
     folder = 'ft/acro'
-    folder = 'comparison'
-    plotter(folder=folder, metrics=['step', 'time/fps', 'fps'])
+    folder = 'ft/benchmark'
+    plotter(folder=folder, metrics=['step', 'train/loss', 'loss'])
     plotter(folder=folder)
     plotter(folder=folder, metrics=['step', 'rollout/reward'])
     plotter(folder=folder, metrics=['step', 'train/theta', 'theta'])
