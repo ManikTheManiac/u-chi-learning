@@ -194,8 +194,10 @@ class LogULearner:
                 next_action = self.online_logus.choose_action(next_state)
 
                 episode_reward += reward
+                #TODO: Determine whether this should be done or terminated (or truncated?)
+                # Looks like done (both) works best... possibly because we need continuing env?
                 self.replay_buffer.add(
-                    state, next_state, action, next_action, reward, terminated)
+                    state, next_state, action, next_action, reward, done)
                 state = next_state
                 action = next_action
                 if self.env_steps % self.log_interval == 0:
@@ -265,7 +267,7 @@ def main():
     # env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
-    env_id = 'MountainCar-v0'
+    # env_id = 'MountainCar-v0'
     from hparams import mcar_hparams as config
     agent = LogULearner(env_id, **config, device='cpu', log_dir='multinasium', num_nets=2)
     agent.learn(total_timesteps=500_000)
