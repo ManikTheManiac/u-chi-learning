@@ -13,16 +13,16 @@ cartpole_hparams0 = {
 }
 
 mcar_hparams = {
-    'beta': 0.75,
-    'batch_size': 400,
-    'buffer_size': 150000,
-    'gradient_steps': 8,
-    'learning_rate': 2.5e-3,
-    'target_update_interval': 700,
-    'tau': 0.85,
-    'tau_theta': 0.85,
-    'hidden_dim': 256,
-    'train_freq': 10
+    'beta': 0.78,
+    'batch_size': 950,
+    'buffer_size': 53000,
+    'gradient_steps': 24,
+    'learning_rate': 7.2e-3,
+    'target_update_interval': 2700,
+    'tau': 0.88,
+    'tau_theta': 0.23,
+    'hidden_dim': 64,
+    'train_freq': 125
 }
 
 cartpole_rawlik = {
@@ -53,7 +53,7 @@ cartpole_ppo = {
 cartpole_hparams1 = {
     'beta': 1.0,
     'batch_size': 256,
-    'buffer_size': 10_000,
+    'buffer_size': 100_000,
     'gradient_steps': 4,
     'learning_rate': 3.6e-3,
     'target_update_interval': 125,

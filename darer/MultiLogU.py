@@ -1,9 +1,6 @@
-# import gym
 import gymnasium as gym
 import torch
 import numpy as np
-from stable_baselines3.common.vec_env import unwrap_vec_normalize
-import os
 from torch.nn import functional as F
 from gymnasium.wrappers import TimeLimit
 import time
@@ -184,11 +181,10 @@ class LogULearner:
 
                 if self.env_steps % self.target_update_interval == 0:
                     # Do a Polyak update of parameters:
-                    # self.target_logus.polyak(
-                    #     self.online_logus.parameters(), self.tau)
-                    # loop thru the nets and do polyak:
-                    polyak_update(self.online_logus.nets[0].parameters(), self.target_logus.nets[0].parameters(), self.tau)
-                    polyak_update( self.online_logus.nets[1].parameters(), self.target_logus.nets[1].parameters(), self.tau)
+                    self.target_logus.polyak(self.online_logus, self.tau)
+                    # loop thru the nets and do polyak manually:
+                    # polyak_update(self.online_logus.nets[0].parameters(), self.target_logus.nets[0].parameters(), self.tau)
+                    # polyak_update(self.online_logus.nets[1].parameters(), self.target_logus.nets[1].parameters(), self.tau)
 
                 self.env_steps += 1
                 next_action = self.online_logus.choose_action(next_state)
@@ -220,7 +216,7 @@ class LogULearner:
                     t0 = time.thread_time_ns()
                     self.logger.record("rollout/reward", self.rollout_reward)
 
-    def evaluate(self, n_episodes=1):
+    def evaluate(self, n_episodes=5):
         # run the current policy and return the average reward
         avg_reward = 0.
         for ep in range(n_episodes):
@@ -267,10 +263,10 @@ def main():
     # env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
-    # env_id = 'MountainCar-v0'
+    env_id = 'MountainCar-v0'
     from hparams import mcar_hparams as config
     agent = LogULearner(env_id, **config, device='cpu', log_dir='multinasium', num_nets=2)
-    agent.learn(total_timesteps=500_000)
+    agent.learn(total_timesteps=250_000)
 
 
 if __name__ == '__main__':

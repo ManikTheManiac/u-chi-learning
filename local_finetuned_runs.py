@@ -1,5 +1,5 @@
 import argparse
-from LogU import LogULearner
+from darer.MultiLogU import LogULearner
 from CustomDQN import CustomDQN
 from LogURawlik import LogULearner
 from CustomPPO import CustomPPO

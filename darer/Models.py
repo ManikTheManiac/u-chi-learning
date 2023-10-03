@@ -1,4 +1,3 @@
-import gym
 import torch
 import torch.nn as nn
 from torch.distributions import Categorical
@@ -6,7 +5,8 @@ from stable_baselines3.common.preprocessing import preprocess_obs
 import numpy as np
 from stable_baselines3.common.distributions import SquashedDiagGaussianDistribution
 from stable_baselines3.sac.policies import Actor
-from stable_baselines3.common.utils import polyak_update
+from stable_baselines3.common.utils import polyak_update, zip_strict
+
 
 class LogUNet(nn.Module):
     def __init__(self, env, device='cuda', hidden_dim=256):
@@ -146,9 +146,15 @@ class TargetNets():
         for new_state, net in zip(list_of_state_dicts, self.nets):
             net.load_state_dict(new_state)
 
-    def polyak(self, new_weights, tau):
-        for weights, new_weights in zip(self.parameters(), new_weights):
-            polyak_update(new_weights, weights, tau)
+    def polyak(self, new_nets_list, tau):
+        # for weights, new_weights in zip(self.parameters(), new_weights_list):
+        #     polyak_update(new_weights, weights, tau)
+
+        # zip does not raise an exception if length of parameters does not match.
+        for params, target_params in zip(new_nets_list.parameters(), self.parameters()):
+            for param, target_param in zip_strict(params, target_params):
+                target_param.data.mul_(1 - tau)
+                torch.add(target_param.data, param.data, alpha=tau, out=target_param.data)
 
     def parameters(self):
         return [net.parameters() for net in self.nets]
