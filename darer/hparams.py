@@ -26,16 +26,16 @@ mcar_hparams = {
 }
 
 mcar_hparams2 = {
-    'beta': 100,
+    'beta': 150,
     'batch_size': 256,
     'buffer_size': 136000,
-    'gradient_steps': 1,
-    'learning_rate': 3e-4,
+    'gradient_steps': 10,
+    'learning_rate': 5e-3,
     'target_update_interval': 1500,
     'tau': 0.9,
-    'tau_theta': 0.0001,
+    'tau_theta': 0.001,
     'hidden_dim': 128,
-    'train_freq': 1
+    'train_freq': 20
 }
 
 

@@ -122,7 +122,7 @@ class LogUActor:
         self.actor = Actor(self.env.observation_space, self.env.action_space, 
                            [self.hidden_dim, self.hidden_dim], 
                            features_extractor=nn.Flatten(),
-                           features_dim=3,)
+                           features_dim=27,)
                         #    device=self.device)
         # SACPolicy(self.env.observation_space, self.env.action_space, lambda x: 1e-3)#, self.hidden_dim, self.device)
         # Make (all) LogUs learnable:
@@ -200,7 +200,7 @@ class LogUActor:
             self.logger.record("max_grad", total_norm.item())
             self.optimizers.step()
         # new_thetas = torch.clamp(new_thetas, 0, -1)
-
+        # self.beta += 1e-4
         self.theta = self.tau_theta*self.theta + \
             (1 - self.tau_theta) * torch.mean(new_thetas)
 
@@ -335,7 +335,7 @@ def main():
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
     env_id = 'Pendulum-v1'
-    # env_id = 'Ant-v4'
+    env_id = 'Ant-v4'
     from darer.hparams import mcar_hparams2 as config
     agent = LogUActor(env_id, **config, device='cpu', log_dir='pend', num_nets=2)
     agent.learn(total_timesteps=50_000_000)
