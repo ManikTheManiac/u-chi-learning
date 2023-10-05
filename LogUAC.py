@@ -21,9 +21,9 @@ class LogUsa(nn.Module):
         super(LogUsa, self).__init__()
         self.env = env
         self.device = device
-        try:
+        if isinstance(env.observation_space, gym.spaces.Discrete):
             self.nS = env.observation_space.n
-        except AttributeError:
+        elif isinstance(env.observation_space, gym.spaces.Box):
             self.nS = env.observation_space.shape[0]
 
         self.nA = env.action_space.shape[0]
@@ -67,9 +67,9 @@ class LogUActor:
                  ) -> None:
         self.env = gym.make(env_id)
         # timelimit:
-        self.env = TimeLimit(self.env, max_episode_steps=500)
+        # self.env = TimeLimit(self.env, max_episode_steps=500)
         # make another instance for evaluation purposes only:
-        self.eval_env = gym.make(env_id)
+        self.eval_env = gym.make(env_id, render_mode='human')
         # self.eval_env = TimeLimit(self.eval_env, max_episode_steps=500)
         # self._vec_normalize_env = unwrap_vec_normalize(self.env)
         self.beta = beta
@@ -123,6 +123,7 @@ class LogUActor:
                            [self.hidden_dim, self.hidden_dim], 
                            features_extractor=nn.Flatten(),
                            features_dim=3,)
+                        #    device=self.device)
         # SACPolicy(self.env.observation_space, self.env.action_space, lambda x: 1e-3)#, self.hidden_dim, self.device)
         # Make (all) LogUs learnable:
         opts = [torch.optim.Adam(logu.parameters(), lr=self.learning_rate)
@@ -137,7 +138,7 @@ class LogUActor:
         for grad_step in range(self.gradient_steps):
             replay = self.replay_buffer.sample(self.batch_size)
             states, actions, next_states, next_actions, dones, rewards = replay
-            _, curr_log_prob = self.actor.action_log_prob(states)
+            actor_actions, curr_log_prob = self.actor.action_log_prob(states)
             with torch.no_grad():
                 ref_logu = [logu(self.ref_next_state, self.ref_action) for logu in self.online_logus]
                 # since pi0 is same for all, just do exp(ref_logu) and sum over actions:
@@ -148,8 +149,8 @@ class LogUActor:
 
 
                 # Action by the current actor for the sampled state
-                next_actions_pi, log_prob = self.actor.action_log_prob(next_states)
-                log_prob = log_prob.reshape(-1, 1)
+                next_actions_pi, next_log_prob = self.actor.action_log_prob(next_states)
+                next_log_prob = next_log_prob.reshape(-1, 1)
                 ###
                 target_next_logu = torch.cat([target_logu(next_states, next_actions_pi)
                                               for target_logu in self.target_logus], dim=1)
@@ -172,8 +173,14 @@ class LogUActor:
             # MSE loss:
             # loss = F.mse_loss(curr_logu, expected_curr_logu)
             # actor_loss = (curr_log_prob/self.beta - curr_logu.min(dim=1)[0]).mean()
-            actor_loss = F.mse_loss(curr_log_prob, expected_curr_logu)
-
+        
+            # actor_loss = F.smooth_l1_loss(self.beta * next_log_prob.squeeze(1) , next_logu.min(dim=1)[0])
+            # actor_loss = F.smooth_l1_loss(curr_log_prob, expected_curr_logu))
+            actor_curr_logu = torch.cat([online_logu(states, actor_actions)
+                                   for online_logu in self.online_logus], dim=1)
+            actor_loss = F.smooth_l1_loss(curr_log_prob, actor_curr_logu.min(dim=1)[0])
+            # actor_loss = (curr_log_prob - actor_curr_logu.min(dim=1)[0]).mean()
+            self.logger.record("train/log_prob", curr_log_prob.mean().item())
             self.logger.record("train/loss", loss.item())
             self.logger.record("train/actor_loss", actor_loss.item())
             self.optimizers.zero_grad()
@@ -187,11 +194,10 @@ class LogUActor:
             self.online_logus.clip_grad_norm(self.max_grad_norm)
 
             # Log the average gradient:
-            # TODO: put this in a parallel process somehow or use dot prods?
-            # total_norm = torch.max(torch.stack(
-            #             [p.grad.detach().abs().max() for p in self.online_logu.parameters()]
-            #             ))
-            # self.logger.record("max_grad", total_norm.item())
+            total_norm = torch.max(torch.stack(
+                        [p.grad.detach().abs().max() for logu in self.online_logus.nets for p in logu.parameters()]
+                        ))
+            self.logger.record("max_grad", total_norm.item())
             self.optimizers.step()
         # new_thetas = torch.clamp(new_thetas, 0, -1)
 
@@ -243,6 +249,8 @@ class LogUActor:
                 if self.env_steps % self.target_update_interval == 0:
                     # Do a Polyak update of parameters:
                     self.target_logus.polyak(self.online_logus, self.tau)
+                    # Update the actor:
+                    # self.actor.polyak_update_target(self.tau)
                     # loop thru the nets and do polyak manually:
                     # polyak_update(self.online_logus.nets[0].parameters(), self.target_logus.nets[0].parameters(), self.tau)
                     # polyak_update(self.online_logus.nets[1].parameters(), self.target_logus.nets[1].parameters(), self.tau)
@@ -328,8 +336,8 @@ def main():
     # env_id = 'MountainCar-v0'
     env_id = 'Pendulum-v1'
     # env_id = 'Ant-v4'
-    from darer.hparams import mcar_hparams as config
-    agent = LogUActor(env_id, **config, device='cpu', log_dir=None, num_nets=2)
+    from darer.hparams import mcar_hparams2 as config
+    agent = LogUActor(env_id, **config, device='cpu', log_dir='pend', num_nets=2)
     agent.learn(total_timesteps=50_000_000)
 
 

@@ -6,18 +6,17 @@ import numpy as np
 from stable_baselines3.common.distributions import SquashedDiagGaussianDistribution
 from stable_baselines3.sac.policies import Actor
 from stable_baselines3.common.utils import polyak_update, zip_strict
-
+from gymnasium import spaces
 
 class LogUNet(nn.Module):
     def __init__(self, env, device='cuda', hidden_dim=256):
         super(LogUNet, self).__init__()
         self.env = env
         self.device = device
-        try:
+        if isinstance(env.observation_space, spaces.Discrete):
             self.nS = env.observation_space.n
-        except AttributeError:
+        elif isinstance(env.observation_space, spaces.Box):
             self.nS = env.observation_space.shape[0]
-
         self.nA = env.action_space.n
         self.fc1 = nn.Linear(self.nS, hidden_dim, device=self.device)
         self.fc2 = nn.Linear(hidden_dim, hidden_dim, device=self.device)
@@ -70,9 +69,9 @@ class UNet(nn.Module):
         super(UNet, self).__init__()
         self.env = env
         self.device = device
-        try:
+        if isinstance(env.observation_space, spaces.Discrete):
             self.nS = env.observation_space.n
-        except AttributeError:
+        elif isinstance(env.observation_space, spaces.Box):
             self.nS = env.observation_space.shape[0]
 
         self.nA = env.action_space.n

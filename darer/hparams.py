@@ -13,7 +13,7 @@ cartpole_hparams0 = {
 }
 
 mcar_hparams = {
-    'beta': 1.78,
+    'beta': 0.78,
     'batch_size': 950,
     'buffer_size': 53000,
     'gradient_steps': 24,
@@ -26,16 +26,16 @@ mcar_hparams = {
 }
 
 mcar_hparams2 = {
-    'beta': 0.78,
-    'batch_size': 370,
+    'beta': 100,
+    'batch_size': 256,
     'buffer_size': 136000,
-    'gradient_steps': 20,
-    'learning_rate': 4.9e-3,
-    'target_update_interval': 3500,
-    'tau': 0.81,
-    'tau_theta': 0.15,
-    'hidden_dim': 64,
-    'train_freq': 40
+    'gradient_steps': 1,
+    'learning_rate': 3e-4,
+    'target_update_interval': 1500,
+    'tau': 0.9,
+    'tau_theta': 0.0001,
+    'hidden_dim': 128,
+    'train_freq': 1
 }
 
 
