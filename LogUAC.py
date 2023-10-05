@@ -8,7 +8,7 @@ import time
 from darer.ReplayBuffers import Memory, SB3Memory
 from darer.Models import OnlineNets, Optimizers, TargetNets
 from darer.utils import logger_at_folder
-from stable_baselines3.sac.policies import SACPolicy
+from stable_baselines3.sac.policies import SACPolicy, Actor
 # raise warning level for debugger:
 import warnings
 warnings.filterwarnings("error")
@@ -33,7 +33,10 @@ class LogUsa(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, obs, action):
-        x = torch.cat([obs, action], dim=1)
+        obs = torch.Tensor(obs).to(self.device)
+        action = torch.Tensor(action).to(self.device)
+        obs = preprocess_obs(obs, self.env.observation_space)
+        x = torch.cat([obs, action], dim=-1)
         x = self.fc1(x)
         x = self.relu(x)
         x = self.fc2(x)
@@ -116,7 +119,11 @@ class LogUActor:
                                                      for _ in range(self.num_nets)])
         self.target_logus.load_state_dict(
             [logu.state_dict() for logu in self.online_logus])
-        self.actor = SACPolicy(self.env.observation_space, self.env.action_space, lambda x: 1e-3)#, self.hidden_dim, self.device)
+        self.actor = Actor(self.env.observation_space, self.env.action_space, 
+                           [self.hidden_dim, self.hidden_dim], 
+                           features_extractor=nn.Flatten(),
+                           features_dim=3,)
+        # SACPolicy(self.env.observation_space, self.env.action_space, lambda x: 1e-3)#, self.hidden_dim, self.device)
         # Make (all) LogUs learnable:
         opts = [torch.optim.Adam(logu.parameters(), lr=self.learning_rate)
                 for logu in self.online_logus]
@@ -130,7 +137,7 @@ class LogUActor:
         for grad_step in range(self.gradient_steps):
             replay = self.replay_buffer.sample(self.batch_size)
             states, actions, next_states, next_actions, dones, rewards = replay
-
+            _, curr_log_prob = self.actor.action_log_prob(states)
             with torch.no_grad():
                 ref_logu = [logu(self.ref_next_state, self.ref_action) for logu in self.online_logus]
                 # since pi0 is same for all, just do exp(ref_logu) and sum over actions:
@@ -160,14 +167,15 @@ class LogUActor:
             
             self.logger.record("train/theta", self.theta.item())
             self.logger.record("train/avg logu", curr_logu.mean().item())
-            # print(curr_logu.shape)
-            # print(expected_curr_logu.shape)
             # Huber loss:
             loss = 0.5*sum(F.smooth_l1_loss(logu, expected_curr_logu) for logu in curr_logu.T)
             # MSE loss:
             # loss = F.mse_loss(curr_logu, expected_curr_logu)
-            actor_loss = (log_prob - next_logu).mean()
+            # actor_loss = (curr_log_prob/self.beta - curr_logu.min(dim=1)[0]).mean()
+            actor_loss = F.mse_loss(curr_log_prob, expected_curr_logu)
+
             self.logger.record("train/loss", loss.item())
+            self.logger.record("train/actor_loss", actor_loss.item())
             self.optimizers.zero_grad()
             # Increase update counter
             self._n_updates += self.gradient_steps
@@ -201,10 +209,19 @@ class LogUActor:
             episode_reward = 0
             done = False
             # Random choice:
-            state = torch.FloatTensor(state).to(self.device)
-            state = preprocess_obs(state, self.env.observation_space)
+
             action, _ = self.actor.predict(state)
-            print(action)
+            # Try 100 random actions, choose one with best logu:
+            # rand_actions = np.array([self.env.action_space.sample()
+            #                 for _ in range(100)])
+            # rand_actions = torch.Tensor(rand_actions).to(self.device)
+            # states = torch.Tensor(np.array([state for _ in range(100)])).to(self.device)
+            # rand_logu = torch.cat([logu(states, rand_actions)
+            #                           for logu in self.online_logus], dim=1)
+            # rand_logu = rand_logu.min(dim=0)[0]
+            # action = np.array([rand_actions[torch.argmax(rand_logu)].item())
+        
+            # print(action)
             self.num_episodes += 1
             self.rollout_reward = 0
             while not done:
@@ -267,7 +284,8 @@ class LogUActor:
             state, _ = self.eval_env.reset()
             done = False
             while not done:
-                action = self.online_logus.greedy_action(state)
+                # action = self.online_logus.greedy_action(state)
+                action = self.actor.predict(state)[0]
                 # action = self.online_logus.choose_action(state)
                 # if ep == 0:
                 # self.eval_env.render()
@@ -309,9 +327,10 @@ def main():
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
     env_id = 'Pendulum-v1'
-    from darer.hparams import mcar_hparams2 as config
-    agent = LogUActor(env_id, **config, device='cpu', log_dir='multinasium', num_nets=2)
-    agent.learn(total_timesteps=250_000)
+    # env_id = 'Ant-v4'
+    from darer.hparams import mcar_hparams as config
+    agent = LogUActor(env_id, **config, device='cpu', log_dir=None, num_nets=2)
+    agent.learn(total_timesteps=50_000_000)
 
 
 if __name__ == '__main__':

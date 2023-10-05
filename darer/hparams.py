@@ -13,7 +13,7 @@ cartpole_hparams0 = {
 }
 
 mcar_hparams = {
-    'beta': 0.78,
+    'beta': 1.78,
     'batch_size': 950,
     'buffer_size': 53000,
     'gradient_steps': 24,
