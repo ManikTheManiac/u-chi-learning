@@ -147,14 +147,15 @@ class TargetNets():
             net.load_state_dict(new_state)
 
     def polyak(self, new_nets_list, tau):
-        # for weights, new_weights in zip(self.parameters(), new_weights_list):
-        #     polyak_update(new_weights, weights, tau)
-
-        # zip does not raise an exception if length of parameters does not match.
-        for params, target_params in zip(new_nets_list.parameters(), self.parameters()):
-            for param, target_param in zip_strict(params, target_params):
-                target_param.data.mul_(1 - tau)
-                torch.add(target_param.data, param.data, alpha=tau, out=target_param.data)
+        with torch.no_grad():
+            # zip does not raise an exception if length of parameters does not match.
+            for new_params, target_params in zip(new_nets_list.parameters(), self.parameters()):
+                for new_param, target_param in zip_strict(new_params, target_params):
+                    # target_param.data.mul_(tau)
+                    # new_param.data.mul_(1 - tau)
+                    # target_param.data.add_(new_param.data)
+                    target_param.data.mul_(tau).add_(new_param.data, alpha=1.0-tau)
+                    # torch.add(target_param.data, new_param.data, out=target_param.data)
 
     def parameters(self):
         return [net.parameters() for net in self.nets]
@@ -180,7 +181,7 @@ class OnlineNets():
         actions = [net.choose_action(state) for net in self.nets]
         action = np.random.choice(actions)
         # perhaps re-weight this based on pessimism?
-        return action.item()
+        return action
 
     def parameters(self):
         return [net.parameters() for net in self.nets]

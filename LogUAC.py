@@ -2,18 +2,47 @@ import gymnasium as gym
 import torch
 import numpy as np
 from torch.nn import functional as F
+from torch import nn
 from gymnasium.wrappers import TimeLimit
 import time
-from ReplayBuffers import Memory, SB3Memory
-from Models import LogUNet, OnlineNets, Optimizers, TargetNets
-from utils import logger_at_folder
+from darer.ReplayBuffers import Memory, SB3Memory
+from darer.Models import OnlineNets, Optimizers, TargetNets
+from darer.utils import logger_at_folder
+from stable_baselines3.sac.policies import SACPolicy
 # raise warning level for debugger:
 import warnings
 warnings.filterwarnings("error")
 from stable_baselines3.common.utils import polyak_update
+from stable_baselines3.common.preprocessing import preprocess_obs
 
-TimeLimit()
-class LogULearner:
+
+class LogUsa(nn.Module):
+    def __init__(self, env, hidden_dim=256, device='cuda'):
+        super(LogUsa, self).__init__()
+        self.env = env
+        self.device = device
+        try:
+            self.nS = env.observation_space.n
+        except AttributeError:
+            self.nS = env.observation_space.shape[0]
+
+        self.nA = env.action_space.shape[0]
+        self.fc1 = nn.Linear(self.nS + self.nA, hidden_dim, device=self.device)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim, device=self.device)
+        self.fc3 = nn.Linear(hidden_dim, self.nA, device=self.device)
+        self.relu = nn.ReLU()
+
+    def forward(self, obs, action):
+        x = torch.cat([obs, action], dim=1)
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        x = self.relu(x)
+        logu = self.fc3(x)
+        return logu
+
+
+class LogUActor:
     def __init__(self,
                  env_id,
                  beta,
@@ -81,15 +110,17 @@ class LogULearner:
         self._initialize_networks()
 
     def _initialize_networks(self):
-        self.online_logus = OnlineNets(list_of_nets=[LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
+        self.online_logus = OnlineNets(list_of_nets=[LogUsa(self.env, hidden_dim=self.hidden_dim, device=self.device)
                                                      for _ in range(self.num_nets)])
-        self.target_logus = TargetNets(list_of_nets=[LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
+        self.target_logus = TargetNets(list_of_nets=[LogUsa(self.env, hidden_dim=self.hidden_dim, device=self.device)
                                                      for _ in range(self.num_nets)])
         self.target_logus.load_state_dict(
             [logu.state_dict() for logu in self.online_logus])
+        self.actor = SACPolicy(self.env.observation_space, self.env.action_space, lambda x: 1e-3)#, self.hidden_dim, self.device)
         # Make (all) LogUs learnable:
         opts = [torch.optim.Adam(logu.parameters(), lr=self.learning_rate)
                 for logu in self.online_logus]
+        opts.append(torch.optim.Adam(self.actor.parameters(), lr=self.learning_rate))
         self.optimizers = Optimizers(opts)
 
     def train(self,):
@@ -101,13 +132,19 @@ class LogULearner:
             states, actions, next_states, next_actions, dones, rewards = replay
 
             with torch.no_grad():
-                ref_logu = [logu(self.ref_next_state) for logu in self.online_logus]
+                ref_logu = [logu(self.ref_next_state, self.ref_action) for logu in self.online_logus]
                 # since pi0 is same for all, just do exp(ref_logu) and sum over actions:
                 ref_chi = torch.stack([torch.exp(ref_logu_val).sum(dim=-1)
                                        for ref_logu_val in ref_logu], dim=-1)
                 new_theta = self.ref_reward - torch.log(ref_chi)
                 new_thetas[grad_step] = torch.min(new_theta,dim=-1)[0]
-                target_next_logu = torch.cat([target_logu(next_states).squeeze().gather(1, next_actions.long())
+
+
+                # Action by the current actor for the sampled state
+                next_actions_pi, log_prob = self.actor.action_log_prob(next_states)
+                log_prob = log_prob.reshape(-1, 1)
+                ###
+                target_next_logu = torch.cat([target_logu(next_states, next_actions_pi)
                                               for target_logu in self.target_logus], dim=1)
 
                 next_logu, _ = torch.min(target_next_logu, dim=-1, keepdim=True)
@@ -116,7 +153,9 @@ class LogULearner:
                     (rewards + self.theta) + (1 - dones) * next_logu
                 expected_curr_logu = expected_curr_logu.squeeze(1)
 
-            curr_logu = torch.cat([online_logu(states).squeeze().gather(1, actions.long())
+            next_logu = torch.cat([target_logu(next_states, next_actions_pi)
+                                      for target_logu in self.target_logus], dim=1)
+            curr_logu = torch.cat([online_logu(states, actions)
                                    for online_logu in self.online_logus], dim=1)
             
             self.logger.record("train/theta", self.theta.item())
@@ -127,10 +166,13 @@ class LogULearner:
             loss = 0.5*sum(F.smooth_l1_loss(logu, expected_curr_logu) for logu in curr_logu.T)
             # MSE loss:
             # loss = F.mse_loss(curr_logu, expected_curr_logu)
+            actor_loss = (log_prob - next_logu).mean()
             self.logger.record("train/loss", loss.item())
             self.optimizers.zero_grad()
             # Increase update counter
             self._n_updates += self.gradient_steps
+
+            actor_loss.backward()
 
             # Clip gradient norm
             loss.backward()
@@ -159,8 +201,10 @@ class LogULearner:
             episode_reward = 0
             done = False
             # Random choice:
-            action = self.online_logus.choose_action(state)
-
+            state = torch.FloatTensor(state).to(self.device)
+            state = preprocess_obs(state, self.env.observation_space)
+            action, _ = self.actor.predict(state)
+            print(action)
             self.num_episodes += 1
             self.rollout_reward = 0
             while not done:
@@ -187,7 +231,7 @@ class LogULearner:
                     # polyak_update(self.online_logus.nets[1].parameters(), self.target_logus.nets[1].parameters(), self.tau)
 
                 self.env_steps += 1
-                next_action = self.online_logus.choose_action(next_state)
+                next_action, _ = self.actor.predict(next_state)
 
                 episode_reward += reward
                 #TODO: Determine whether this should be done or terminated (or truncated?)
@@ -263,9 +307,10 @@ def main():
     # env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
-    env_id = 'MountainCar-v0'
-    from hparams import mcar_hparams2 as config
-    agent = LogULearner(env_id, **config, device='cpu', log_dir='multinasium', num_nets=2)
+    # env_id = 'MountainCar-v0'
+    env_id = 'Pendulum-v1'
+    from darer.hparams import mcar_hparams2 as config
+    agent = LogUActor(env_id, **config, device='cpu', log_dir='multinasium', num_nets=2)
     agent.learn(total_timesteps=250_000)
 
 

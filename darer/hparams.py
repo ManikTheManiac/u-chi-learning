@@ -18,12 +18,26 @@ mcar_hparams = {
     'buffer_size': 53000,
     'gradient_steps': 24,
     'learning_rate': 7.2e-3,
-    'target_update_interval': 2700,
-    'tau': 0.88,
+    'target_update_interval': 270,
+    'tau': 0.28,
     'tau_theta': 0.23,
     'hidden_dim': 64,
     'train_freq': 125
 }
+
+mcar_hparams2 = {
+    'beta': 0.78,
+    'batch_size': 370,
+    'buffer_size': 136000,
+    'gradient_steps': 20,
+    'learning_rate': 4.9e-3,
+    'target_update_interval': 3500,
+    'tau': 0.81,
+    'tau_theta': 0.15,
+    'hidden_dim': 64,
+    'train_freq': 40
+}
+
 
 cartpole_rawlik = {
     'beta': 0.1,

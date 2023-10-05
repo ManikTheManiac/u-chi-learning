@@ -42,18 +42,20 @@ def test_polyak(target_nets, target_mixture_nets):
     # Create some dummy parameters
 
     # Perform polyak update
-    tau = 0.5
+    tau = 0.1
     with torch.no_grad():
         # deep copy the original nets:
         original_nets = copy.deepcopy(target_nets)
-        target_nets.polyak(target_mixture_nets.parameters(), tau)
-
+        target_nets.polyak(target_mixture_nets, tau)
 
         # Check if the nets have been updated
         for updated_net, mixture_net, original_net in zip(target_nets, target_mixture_nets, original_nets):
             for updated_param, mix_param, original_param in zip(updated_net.parameters(), mixture_net.parameters(), original_net.parameters()):
                 # Ensure each parameter is updated correctly
-                assert torch.all(torch.eq(updated_param, tau * mix_param + (1 - tau) * original_param))
+                mix_param.data.mul_(1 - tau)
+                original_param.data.mul_(tau)
+                result = torch.add(mix_param.data, original_param.data)
+                assert torch.allclose(updated_param.data, result)
 
 def test_parameters(target_nets):
     # Get parameters using the parameters method
