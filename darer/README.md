@@ -45,6 +45,16 @@ class ReplayBufferSamples(NamedTuple):
     dones: th.Tensor
     rewards: th.Tensor
 
+I added this line to the `gymnasium/envs/__init__.py` file:
+```
+register(
+    id="Simple-v0",
+    entry_point="gymnasium.envs.classic_control.simple_env:SimpleEnv",
+    max_episode_steps=10,
+    reward_threshold=1.0,
+)
+```
+
 Model-based ground truth comparisons with tabular algorithms:
 
 ![eigvec](figures/left_eigenvector_MB.png)

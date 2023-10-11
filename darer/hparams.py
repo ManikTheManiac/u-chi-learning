@@ -26,16 +26,43 @@ mcar_hparams = {
 }
 
 mcar_hparams2 = {
-    'beta': 150,
+    'beta': 70,
     'batch_size': 256,
-    'buffer_size': 136000,
-    'gradient_steps': 10,
-    'learning_rate': 5e-3,
-    'target_update_interval': 1500,
-    'tau': 0.9,
-    'tau_theta': 0.001,
+    'buffer_size': 1_300_000,
+    'gradient_steps': 1,
+    'learning_rate': 5e-4,
+    'target_update_interval': 5000,
+    'tau': 0.95,
+    'tau_theta': 0.0001,
     'hidden_dim': 128,
-    'train_freq': 20
+    'train_freq': 1
+}
+
+sac_hparams2 = {
+    'beta': 80,
+    'batch_size': 32,
+    'buffer_size': 1_000_000,
+    'gradient_steps': 1,
+    'learning_rate': 3e-4,
+    'target_update_interval': 1,
+    'tau': 0.005,
+    'tau_theta': 0.995,
+    'hidden_dim': 64,
+    'train_freq': 1
+}
+
+
+easy_hparams2 = {
+    'beta': 50,
+    'batch_size': 64,
+    'buffer_size': 1_000_000,
+    'gradient_steps': 5,
+    'learning_rate': 1e-5,
+    'target_update_interval': 1,
+    'tau': 0.005,
+    'tau_theta': 0.995,
+    'hidden_dim': 128,
+    'train_freq': 1
 }
 
 

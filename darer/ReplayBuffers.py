@@ -10,6 +10,7 @@ from stable_baselines3.common.type_aliases import (
     DictReplayBufferSamples,
     DictRolloutBufferSamples,
     ReplayBufferSamples,
+    ReplayBufferSamplesNextAction,
     RolloutBufferSamples,
 )
 class Memory:
@@ -192,7 +193,7 @@ class SB3Memory(BaseBuffer):
             self.full = True
             self.pos = 0
 
-    def sample(self, batch_size: int, env = None) -> ReplayBufferSamples:
+    def sample(self, batch_size: int, env = None) -> ReplayBufferSamplesNextAction:
         """
         Sample elements from the replay buffer.
         Custom sampling when using memory efficient variant,
@@ -214,7 +215,7 @@ class SB3Memory(BaseBuffer):
             batch_inds = np.random.randint(0, self.pos, size=batch_size)
         return self._get_samples(batch_inds, env=env)
 
-    def _get_samples(self, batch_inds: np.ndarray, env = None) -> ReplayBufferSamples:
+    def _get_samples(self, batch_inds: np.ndarray, env = None) -> ReplayBufferSamplesNextAction:
         # Sample randomly the env idx
         env_indices = np.random.randint(0, high=self.n_envs, size=(len(batch_inds),))
 
@@ -233,7 +234,7 @@ class SB3Memory(BaseBuffer):
             (self.dones[batch_inds, env_indices] * (1 - self.timeouts[batch_inds, env_indices])).reshape(-1, 1),
             self._normalize_reward(self.rewards[batch_inds, env_indices].reshape(-1, 1), env),
         )
-        return ReplayBufferSamples(*tuple(map(self.to_torch, data)))
+        return ReplayBufferSamplesNextAction(*tuple(map(self.to_torch, data)))
 
     @staticmethod
     def _maybe_cast_dtype(dtype):
