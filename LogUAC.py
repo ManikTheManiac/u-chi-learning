@@ -142,7 +142,7 @@ class LogUActor:
                 # Need to use importance sampling to get the correct expectation:
                 # next_logu *= torch.exp(-next_log_prob)# + np.log(self.nA))
 
-                expected_curr_logu = self.beta * (rewards + (1 - dones) * self.theta) + (1 - dones) * next_logu
+                expected_curr_logu = self.beta * (rewards + self.theta) + (1 - dones) * next_logu
                 expected_curr_logu = expected_curr_logu.squeeze(1)
 
             next_logu = torch.cat([target_logu(next_states, next_actions_pi)
