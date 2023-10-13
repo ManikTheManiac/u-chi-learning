@@ -74,7 +74,8 @@ if __name__ == '__main__':
 
     folder = 'ft/acro'
     folder = 'ft/benchmark'
-    plotter(folder=folder, metrics=['step', 'train/loss', 'loss'])
+    folder = 'multinasium'
+    # plotter(folder=folder, metrics=['step', 'train/loss', 'loss'])
     plotter(folder=folder)
     plotter(folder=folder, metrics=['step', 'rollout/reward'])
     plotter(folder=folder, metrics=['step', 'train/theta', 'theta'])

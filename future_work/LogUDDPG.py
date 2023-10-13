@@ -12,8 +12,8 @@ import warnings
 warnings.filterwarnings("error")
 from stable_baselines3.common.utils import polyak_update
 
-TimeLimit()
-class LogULearner:
+
+class LogUActor:
     def __init__(self,
                  env_id,
                  beta,

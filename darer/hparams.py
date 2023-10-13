@@ -13,17 +13,58 @@ cartpole_hparams0 = {
 }
 
 mcar_hparams = {
-    'beta': 0.75,
-    'batch_size': 400,
-    'buffer_size': 150000,
-    'gradient_steps': 8,
-    'learning_rate': 2.5e-3,
-    'target_update_interval': 700,
-    'tau': 0.85,
-    'tau_theta': 0.85,
-    'hidden_dim': 256,
-    'train_freq': 10
+    'beta': 0.78,
+    'batch_size': 950,
+    'buffer_size': 53000,
+    'gradient_steps': 24,
+    'learning_rate': 7.2e-3,
+    'target_update_interval': 270,
+    'tau': 0.28,
+    'tau_theta': 0.23,
+    'hidden_dim': 64,
+    'train_freq': 125
 }
+
+mcar_hparams2 = {
+    'beta': 70,
+    'batch_size': 256,
+    'buffer_size': 1_300_000,
+    'gradient_steps': 1,
+    'learning_rate': 5e-4,
+    'target_update_interval': 5000,
+    'tau': 0.95,
+    'tau_theta': 0.0001,
+    'hidden_dim': 128,
+    'train_freq': 1
+}
+
+sac_hparams2 = {
+    'beta': 80,
+    'batch_size': 32,
+    'buffer_size': 1_000_000,
+    'gradient_steps': 1,
+    'learning_rate': 3e-4,
+    'target_update_interval': 1,
+    'tau': 0.005,
+    'tau_theta': 0.995,
+    'hidden_dim': 64,
+    'train_freq': 1
+}
+
+
+easy_hparams2 = {
+    'beta': 10,
+    'batch_size': 512,
+    'buffer_size': 1_000_000,
+    'gradient_steps': 1,
+    'learning_rate': 3e-4,
+    'target_update_interval': 5,
+    'tau': 0.005,
+    'tau_theta': 0.995,
+    'hidden_dim': 256,
+    'train_freq': 1
+}
+
 
 cartpole_rawlik = {
     'beta': 0.1,
@@ -53,13 +94,13 @@ cartpole_ppo = {
 cartpole_hparams1 = {
     'beta': 1.0,
     'batch_size': 256,
-    'buffer_size': 10_000,
-    'gradient_steps': 4,
+    'buffer_size': 100_000,
+    'gradient_steps': 1,
     'learning_rate': 3.6e-3,
     'target_update_interval': 125,
     'tau': 0.7,
     'tau_theta': 0.7,
-    'train_freq': 1,
+    'train_freq': 4,
     'hidden_dim': 512,
 }
 
