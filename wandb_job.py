@@ -1,10 +1,12 @@
 import argparse
 import wandb
 from darer.MultiLogU import LogULearner
+from LogUAC import LogUActor
 
 # env_id = 'CartPole-v1'
-env_id = 'MountainCar-v0'
-
+# env_id = 'MountainCar-v0'
+env_id = 'HalfCheetah-v4'
+# env_id = 'Pendulum-v1'
 
 def runner(config=None, run=None):
     # Convert nec kwargs to ints:
@@ -13,11 +15,11 @@ def runner(config=None, run=None):
     # Remove the "learning_starts" kwarg, for now:
     # config.pop('learning_starts')
     # config.pop('policy_kwargs')
-    runs_per_hparam = 3
+    runs_per_hparam = 2
     auc = 0
     for _ in range(runs_per_hparam):
-        model = LogULearner(env_id, **config, log_interval=5000, device='cuda')
-        model.learn(total_timesteps=100_000)
+        model = LogUActor(env_id, **config, log_interval=1000, device='cuda')
+        model.learn(total_timesteps=50_000)
         auc += model.eval_auc
     auc /= runs_per_hparam
     wandb.log({'avg_eval_auc': auc})

@@ -53,15 +53,15 @@ sac_hparams2 = {
 
 
 easy_hparams2 = {
-    'beta': 50,
-    'batch_size': 64,
+    'beta': 10,
+    'batch_size': 512,
     'buffer_size': 1_000_000,
-    'gradient_steps': 5,
-    'learning_rate': 1e-5,
-    'target_update_interval': 1,
+    'gradient_steps': 1,
+    'learning_rate': 3e-4,
+    'target_update_interval': 5,
     'tau': 0.005,
     'tau_theta': 0.995,
-    'hidden_dim': 128,
+    'hidden_dim': 256,
     'train_freq': 1
 }
 
@@ -95,12 +95,12 @@ cartpole_hparams1 = {
     'beta': 1.0,
     'batch_size': 256,
     'buffer_size': 100_000,
-    'gradient_steps': 4,
+    'gradient_steps': 1,
     'learning_rate': 3.6e-3,
     'target_update_interval': 125,
     'tau': 0.7,
     'tau_theta': 0.7,
-    'train_freq': 1,
+    'train_freq': 4,
     'hidden_dim': 512,
 }
 

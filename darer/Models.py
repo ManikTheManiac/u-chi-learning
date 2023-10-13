@@ -1,12 +1,11 @@
 import torch
 import torch.nn as nn
 from torch.distributions import Categorical
-from stable_baselines3.common.preprocessing import preprocess_obs
+from stable_baselines3.common.preprocessing import preprocess_obs, get_action_dim
 import numpy as np
-from stable_baselines3.common.distributions import SquashedDiagGaussianDistribution
-from stable_baselines3.sac.policies import Actor
-from stable_baselines3.common.utils import polyak_update, zip_strict
+from stable_baselines3.common.utils import zip_strict
 from gymnasium import spaces
+import gymnasium as gym
 
 class LogUNet(nn.Module):
     def __init__(self, env, device='cuda', hidden_dim=256):
@@ -173,6 +172,8 @@ class OnlineNets():
             logu = logu.squeeze(1)
             logu = torch.min(logu, dim=0)[0]
             greedy_action = logu.argmax()
+            # greedy_actions = [net(state).argmax() for net in self.nets]
+            # greedy_action = np.random.choice(greedy_actions)
         return greedy_action.item()
 
     def choose_action(self, state):
@@ -189,4 +190,31 @@ class OnlineNets():
         for net in self.nets:
             torch.nn.utils.clip_grad_norm_(net.parameters(), max_grad_norm)
 
+class LogUsa(nn.Module):
+    def __init__(self, env, hidden_dim=256, device='cuda'):
+        super(LogUsa, self).__init__()
+        self.env = env
+        self.device = device
+        if isinstance(env.observation_space, gym.spaces.Discrete):
+            self.nS = env.observation_space.n
+        elif isinstance(env.observation_space, gym.spaces.Box):
+            self.nS = env.observation_space.shape[0]
+
+        self.nA = get_action_dim(self.env.action_space)
+        self.fc1 = nn.Linear(self.nS + self.nA, hidden_dim, device=self.device)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim, device=self.device)
+        self.fc3 = nn.Linear(hidden_dim, 1, device=self.device)
+        self.relu = nn.ReLU()
+
+    def forward(self, obs, action):
+        obs = torch.Tensor(obs).to(self.device)
+        action = torch.Tensor(action).to(self.device)
+        obs = preprocess_obs(obs, self.env.observation_space)
+        x = torch.cat([obs, action], dim=-1)
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        x = self.relu(x)
+        x = self.fc3(x)
+        return x
 
