@@ -1,10 +1,10 @@
+from stable_baselines3.common.preprocessing import preprocess_obs, get_action_dim
 import gymnasium as gym
 import numpy as np
 import torch
 from torch.nn import functional as F
 from torch import nn
 import time
-from darer.ReplayBuffers import Memory, SB3Memory
 from darer.Models import OnlineNets, Optimizers, TargetNets, LogUsa
 from darer.utils import logger_at_folder
 from stable_baselines3.sac.policies import SACPolicy, Actor
@@ -12,7 +12,6 @@ from stable_baselines3.common.buffers import ReplayBuffer
 # raise warning level for debugger:
 import warnings
 warnings.filterwarnings("error")
-from stable_baselines3.common.preprocessing import preprocess_obs, get_action_dim
 
 
 class LogUActor:
@@ -40,7 +39,8 @@ class LogUActor:
         self.env_id = env_id
         self.env = gym.make(env_id)
         # make another instance for evaluation purposes only:
-        self.eval_env = gym.make(env_id, render_mode='human' if render else None)
+        self.eval_env = gym.make(
+            env_id, render_mode='human' if render else None)
 
         # from stable_baselines3.common.vec_env.util import unwrap_vec_normalize
         # self._vec_normalize_env = unwrap_vec_normalize(self.env)
@@ -66,11 +66,11 @@ class LogUActor:
 
         # self.replay_buffer = Memory(buffer_size, device=device)
         self.replay_buffer = ReplayBuffer(buffer_size=buffer_size,
-                                        observation_space=self.env.observation_space,
-                                        action_space=self.env.action_space,
-                                        n_envs=1,
-                                        handle_timeout_termination=False,
-                                        device=device)
+                                          observation_space=self.env.observation_space,
+                                          action_space=self.env.action_space,
+                                          n_envs=1,
+                                          handle_timeout_termination=False,
+                                          device=device)
         self.ref_action = None
         self.ref_state = None
         self.ref_reward = None
@@ -94,24 +94,26 @@ class LogUActor:
         self.target_logus.load_state_dict(
             [logu.state_dict() for logu in self.online_logus])
         n_features = self.env.observation_space.shape[0]
-        self.actor = Actor(self.env.observation_space, self.env.action_space, 
-                           [self.hidden_dim, self.hidden_dim], 
+        self.actor = Actor(self.env.observation_space, self.env.action_space,
+                           [self.hidden_dim, self.hidden_dim],
                            features_extractor=nn.Flatten(),
                            features_dim=n_features,)
         # send the actor to device:
         self.actor.to(self.device)
-        #TODO: Try a fixed covariance network (no/ignored output)
-                        #    device=self.device)
+        # TODO: Try a fixed covariance network (no/ignored output)
+        #    device=self.device)
         # Make (all) LogUs and Actor learnable:
         opts = [torch.optim.Adam(logu.parameters(), lr=self.learning_rate)
                 for logu in self.online_logus]
-        opts.append(torch.optim.Adam(self.actor.parameters(), lr=self.learning_rate))
+        opts.append(torch.optim.Adam(
+            self.actor.parameters(), lr=self.learning_rate))
         self.optimizers = Optimizers(opts)
 
     def train(self,):
         # replay = self.replay_buffer.sample(self.batch_size, env=self._vec_normalize_env)
         # average self.theta over multiple gradient steps
-        new_thetas = torch.zeros(self.gradient_steps, self.num_nets).to(self.device)
+        new_thetas = torch.zeros(
+            self.gradient_steps, self.num_nets).to(self.device)
         for grad_step in range(self.gradient_steps):
             replay = self.replay_buffer.sample(self.batch_size)
             states, actions, next_states, dones, rewards = replay
@@ -119,27 +121,28 @@ class LogUActor:
             with torch.no_grad():
                 # TODO: Average over many random actions:
                 # n_samples = 10
-                # prior_actions = np.array([[self.env.action_space.sample() for _ in range(self.num_nets)] 
+                # prior_actions = np.array([[self.env.action_space.sample() for _ in range(self.num_nets)]
                 #                           for _ in range(n_samples)]).squeeze()
                 # ref_next_state = torch.stack([torch.Tensor(self.ref_next_state) for _ in range(n_samples)], dim=1).squeeze()
                 # prior_actions = torch.Tensor(prior_actions.T).to(self.device)
-                # ref_logu = [logu(ref_next_state.unsqueeze(1), a_s.unsqueeze(1)) 
+                # ref_logu = [logu(ref_next_state.unsqueeze(1), a_s.unsqueeze(1))
                 #             for logu, a_s in zip(self.online_logus, prior_actions)]
                 # ref_chi = torch.stack([torch.exp(ref_logu_val).sum(dim=0)
                 #                        for ref_logu_val in ref_logu], dim=-1) /  n_samples
                 n_samples = 2
                 chi = torch.zeros(n_samples, self.num_nets).to(self.device)
                 for i in range(n_samples):
-                    prior_actions = np.array([self.env.action_space.sample() for _ in range(self.num_nets)])
+                    prior_actions = np.array(
+                        [self.env.action_space.sample() for _ in range(self.num_nets)])
                     ref_logu = [logu(self.ref_next_state, a)
                                 for logu, a in zip(self.online_logus, prior_actions)]
                     ref_chi = torch.stack([torch.exp(ref_logu_val)
                                            for ref_logu_val in ref_logu], dim=-1)
                     chi[i] = ref_chi
-                    
+
                 ref_chi = chi.mean(dim=0)
                 # prior_actions = np.array([self.env.action_space.sample() for _ in range(self.num_nets)])
-                # ref_logu = [logu(self.ref_next_state, a) 
+                # ref_logu = [logu(self.ref_next_state, a)
                 #             for logu, a in zip(self.online_logus, prior_actions)]
                 # ref_chi = torch.stack([torch.exp(ref_logu_val)
                 #                        for ref_logu_val in ref_logu], dim=-1)
@@ -148,13 +151,15 @@ class LogUActor:
                 new_thetas[grad_step, :] = new_theta
 
                 # Action by the current actor for the sampled state
-                next_actions_pi, next_log_prob = self.actor.action_log_prob(next_states)
+                next_actions_pi, next_log_prob = self.actor.action_log_prob(
+                    next_states)
                 next_log_prob = next_log_prob.reshape(-1, 1)
                 ###
-                rand_actions = np.array([self.env.action_space.sample() for _ in range(next_states.shape[0])])
+                rand_actions = np.array(
+                    [self.env.action_space.sample() for _ in range(next_states.shape[0])])
                 ###
                 target_next_logu = torch.stack([target_logu(next_states, rand_actions)
-                                              for target_logu in self.target_logus], dim=1)
+                                                for target_logu in self.target_logus], dim=1)
 
                 next_logu, _ = torch.min(target_next_logu, dim=1)
                 ###
@@ -162,27 +167,30 @@ class LogUActor:
                 #     rand_actions = np.array([self.env.action_space.sample() for _ in range(next_states.shape[0])])
                 #     target_next_logu = torch.stack([target_logu(next_states, rand_actions)
                 #                                     for target_logu in self.target_logus], dim=1)
-                    
+
                 # Need to use importance sampling to get the correct expectation:
                 # next_logu *= torch.exp(-next_log_prob)# + np.log(self.nA))
 
-                expected_curr_logu = self.beta * (rewards + self.theta) + (1 - dones) * next_logu
+                expected_curr_logu = self.beta * \
+                    (rewards + self.theta) + (1 - dones) * next_logu
                 expected_curr_logu = expected_curr_logu.squeeze(1)
 
             next_logu = torch.cat([target_logu(next_states, next_actions_pi)
-                                      for target_logu in self.target_logus], dim=1)
+                                   for target_logu in self.target_logus], dim=1)
             curr_logu = torch.cat([online_logu(states, actions)
                                    for online_logu in self.online_logus], dim=1)
-            
+
             self.logger.record("train/theta", self.theta.item())
             self.logger.record("train/avg logu", curr_logu.mean().item())
             # Huber loss:
-            loss = 0.5*sum(F.smooth_l1_loss(logu, expected_curr_logu) for logu in curr_logu.T)
+            loss = 0.5*sum(F.smooth_l1_loss(logu, expected_curr_logu)
+                           for logu in curr_logu.T)
             # MSE loss:
             actor_curr_logu = torch.cat([online_logu(states, actor_actions)
-                                   for online_logu in self.online_logus], dim=1)
+                                         for online_logu in self.online_logus], dim=1)
 
-            actor_loss = 0.5*F.smooth_l1_loss(curr_log_prob , actor_curr_logu.min(dim=1)[0])
+            actor_loss = 0.5 * \
+                F.smooth_l1_loss(curr_log_prob, actor_curr_logu.min(dim=1)[0])
             self.logger.record("train/log_prob", curr_log_prob.mean().item())
             self.logger.record("train/loss", loss.item())
             self.logger.record("train/actor_loss", actor_loss.item())
@@ -197,9 +205,9 @@ class LogUActor:
 
             # Log the average gradient:
             total_norm = torch.max(torch.stack(
-                        [p.grad.detach().abs().max() for logu in self.online_logus.nets 
-                         for p in logu.parameters()]
-                        ))
+                [p.grad.detach().abs().max() for logu in self.online_logus.nets
+                 for p in logu.parameters()]
+            ))
             self.online_logus.clip_grad_norm(self.max_grad_norm)
             self.logger.record("max_grad", total_norm.item())
             self.optimizers.step()
@@ -207,12 +215,13 @@ class LogUActor:
             for idx, theta in enumerate(new_theta.squeeze(0)):
                 self.logger.record(f"train/theta_{idx}", theta.item())
         # new_thetas = torch.clamp(new_thetas, 0, -10)
-        #TODO: Take the mean, then aggregate:
+        # TODO: Take the mean, then aggregate:
         new_theta = torch.min(new_thetas.mean(dim=0), dim=0)[0]
 
         # new_theta = torch.clamp(new_theta, min=0)
-        # if self.env_steps % self.target_update_interval == 0:
-        self.theta = self.tau_theta * self.theta + (1 - self.tau_theta) * new_theta
+        if self.env_steps % 100*self.target_update_interval == 0:
+            self.theta = self.tau_theta * self.theta + \
+                (1 - self.tau_theta) * new_theta
 
     def learn(self, total_timesteps):
         # Start a timer to log fps:
@@ -229,14 +238,15 @@ class LogUActor:
         self.logger.record("hparams/train_freq", self.train_freq)
         self.logger.record("hparams/max_grad_norm", self.max_grad_norm)
         self.logger.record("hparams/num_nets", self.num_nets)
-        self.logger.record("hparams/target_update_interval", self.target_update_interval)
-        
+        self.logger.record("hparams/target_update_interval",
+                           self.target_update_interval)
+
         while self.env_steps < total_timesteps:
             state, _ = self.env.reset()
             episode_reward = 0
             done = False
             # Random choice:
-            action, _ = self.actor.predict(state, deterministic=True)
+            action, _ = self.actor.predict(state)  # , deterministic=True)
             # action = self.env.action_space.sample()
             self.num_episodes += 1
             self.rollout_reward = 0
@@ -246,9 +256,11 @@ class LogUActor:
                 if self.env_steps < self.learning_starts:
                     action = self.env.action_space.sample()
                 else:
-                    action, _ = self.actor.predict(state)#, deterministic=True)
+                    # , deterministic=True)
+                    action, _ = self.actor.predict(state)
 
-                next_state, reward, terminated, truncated, infos = self.env.step(action)
+                next_state, reward, terminated, truncated, infos = self.env.step(
+                    action)
                 done = terminated or truncated
                 self.rollout_reward += reward
                 if self.env_steps == 0:
@@ -270,7 +282,7 @@ class LogUActor:
                 # next_action, _ = self.actor.predict(next_state,deterministic=False)
 
                 episode_reward += reward
-                #TODO: Determine whether this should be done or terminated (or truncated?)
+                # TODO: Determine whether this should be done or terminated (or truncated?)
                 # Looks like done (both) works best... possibly because we need continuing env?
                 # _ = self.env.action_space.sample()
                 self.replay_buffer.add(
@@ -299,16 +311,16 @@ class LogUActor:
 
                 self.logger.record("rollout/reward", self.rollout_reward)
 
-
-    def evaluate(self, n_episodes=3):
+    def evaluate(self, n_episodes=1):
         # run the current policy and return the average reward
         avg_reward = 0.
         for ep in range(n_episodes):
             state, _ = self.eval_env.reset()
             done = False
             while not done:
-                action, _ = self.actor.predict(state, deterministic=True)
-                next_state, reward, terminated, truncated, info = self.eval_env.step(action)
+                action, _ = self.actor.predict(state)  # , deterministic=True)
+                next_state, reward, terminated, truncated, info = self.eval_env.step(
+                    action)
                 avg_reward += reward
                 state = next_state
                 done = terminated or truncated
@@ -316,20 +328,21 @@ class LogUActor:
 
         avg_reward /= n_episodes
         return avg_reward
-    
+
     # def save_video(self):
         # video_env = self.env_id
         # gym.wrappers.monitoring.video_recorder.VideoRecorder(video_env, path='video.mp4')
+
 
 def main():
     # env_id = 'LunarLander-v2'
     env_id = 'Pendulum-v1'
     # env_id = 'Hopper-v4'
-    env_id = 'HalfCheetah-v4'
+    # env_id = 'HalfCheetah-v4'
     # env_id = 'Ant-v4'
     # env_id = 'Simple-v0'
     from darer.hparams import easy_hparams2 as config
-    agent = LogUActor(env_id, **config, device='cpu', log_dir='pend', 
+    agent = LogUActor(env_id, **config, device='cpu', log_dir='pend',
                       num_nets=2, learning_starts=500, log_interval=500, render=0, max_grad_norm=10)
     agent.learn(total_timesteps=10_000_000)
 
