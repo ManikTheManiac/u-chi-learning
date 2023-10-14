@@ -249,14 +249,13 @@ class LogUActor:
             episode_reward = 0
             done = False
             # Random choice:
-            action, _ = self.actor.predict(state)  # , deterministic=True)
+            # action, _ = self.actor.predict(state)  # , deterministic=True)
             # action = self.env.action_space.sample()
             self.num_episodes += 1
             self.rollout_reward = 0
             while not done:
-                # take a random action:
-                # action = self.env.action_space.sample()
                 if self.env_steps < self.learning_starts:
+                    # take a random action:
                     action = self.env.action_space.sample()
                 else:
                     # , deterministic=True)
@@ -282,16 +281,11 @@ class LogUActor:
                     self.target_logus.polyak(self.online_logus, self.tau)
 
                 self.env_steps += 1
-                # next_action, _ = self.actor.predict(next_state,deterministic=False)
 
                 episode_reward += reward
-                # TODO: Determine whether this should be done or terminated (or truncated?)
-                # Looks like done (both) works best... possibly because we need continuing env?
-                # _ = self.env.action_space.sample()
                 self.replay_buffer.add(
                     state, next_state, action, reward, terminated, infos)
                 state = next_state
-                # action = next_action
                 if self.env_steps % self.log_interval == 0:
                     # end timer:
                     t_final = time.thread_time_ns()
@@ -345,8 +339,9 @@ def main():
     # env_id = 'Ant-v4'
     # env_id = 'Simple-v0'
     from darer.hparams import cartpole_hparams0 as config
-    agent = LogUActor(env_id, **config, device='cuda', log_dir='pend',
-                      num_nets=2, learning_starts=100, log_interval=500, render=1, max_grad_norm=10)
+    agent = LogUActor(env_id, **config, device='cpu',
+                      num_nets=2, learning_starts=100, theta_update_interval=1,
+                      render=0, max_grad_norm=10)
     agent.learn(total_timesteps=10_000_000)
 
 
