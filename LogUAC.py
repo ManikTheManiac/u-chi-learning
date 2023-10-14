@@ -1,4 +1,4 @@
-from stable_baselines3.common.preprocessing import preprocess_obs, get_action_dim
+from stable_baselines3.common.preprocessing import get_action_dim
 import gymnasium as gym
 import numpy as np
 import torch
@@ -7,7 +7,7 @@ from torch import nn
 import time
 from darer.Models import OnlineNets, Optimizers, TargetNets, LogUsa
 from darer.utils import logger_at_folder
-from stable_baselines3.sac.policies import SACPolicy, Actor
+from stable_baselines3.sac.policies import Actor
 from stable_baselines3.common.buffers import ReplayBuffer
 # raise warning level for debugger:
 import warnings
@@ -40,11 +40,9 @@ class LogUActor:
         self.env_id = env_id
         self.env = gym.make(env_id)
         # make another instance for evaluation purposes only:
-        self.eval_env = gym.make(
-            env_id, render_mode='human' if render else None)
+        self.eval_env = gym.make(env_id,
+                                 render_mode='human' if render else None)
 
-        # from stable_baselines3.common.vec_env.util import unwrap_vec_normalize
-        # self._vec_normalize_env = unwrap_vec_normalize(self.env)
         self.nA = get_action_dim(self.env.action_space)
         self.beta = beta
         self.learning_rate = learning_rate
@@ -66,7 +64,6 @@ class LogUActor:
         self.num_nets = num_nets
         self.prior = None
 
-        # self.replay_buffer = Memory(buffer_size, device=device)
         self.replay_buffer = ReplayBuffer(buffer_size=buffer_size,
                                           observation_space=self.env.observation_space,
                                           action_space=self.env.action_space,
@@ -81,8 +78,7 @@ class LogUActor:
         self.num_episodes = 0
 
         # Set up the logger:
-        self.logger = logger_at_folder(
-            log_dir, algo_name=f'hp2{num_nets}nets')
+        self.logger = logger_at_folder(log_dir, algo_name=f'{env_id}')
 
         self._n_updates = 0
         self.env_steps = 0
@@ -103,7 +99,6 @@ class LogUActor:
         # send the actor to device:
         self.actor.to(self.device)
         # TODO: Try a fixed covariance network (no/ignored output)
-        #    device=self.device)
         # Make (all) LogUs and Actor learnable:
         opts = [torch.optim.Adam(logu.parameters(), lr=self.learning_rate)
                 for logu in self.online_logus]
@@ -112,7 +107,6 @@ class LogUActor:
         self.optimizers = Optimizers(opts)
 
     def train(self,):
-        # replay = self.replay_buffer.sample(self.batch_size, env=self._vec_normalize_env)
         # average self.theta over multiple gradient steps
         new_thetas = torch.zeros(
             self.gradient_steps, self.num_nets).to(self.device)
@@ -320,7 +314,7 @@ class LogUActor:
             state, _ = self.eval_env.reset()
             done = False
             while not done:
-                action, _ = self.actor.predict(state)#, deterministic=True)
+                action, _ = self.actor.predict(state)  # , deterministic=True)
                 next_state, reward, terminated, truncated, info = self.eval_env.step(
                     action)
                 avg_reward += reward
