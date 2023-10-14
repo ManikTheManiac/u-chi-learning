@@ -55,6 +55,8 @@ register(
 )
 ```
 
+- Life saver for mujoco setup: https://pytorch.org/rl/reference/generated/knowledge_base/MUJOCO_INSTALLATION.html
+
 Model-based ground truth comparisons with tabular algorithms:
 
 ![eigvec](figures/left_eigenvector_MB.png)
