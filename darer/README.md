@@ -1,5 +1,10 @@
 LogU learning implementation in gym (mazes and cartpole)
 
+# Simple TODOs:
+- [ ] Compare multilogu w/ and w/o the 1/A factor in chi calc.
+- [ ] Same w/ periodic updates of ref s,a,s'
+- [ ] Implement LR schedule
+
 # New (Simple) Features:
 - [x] Monitor FPS
 - [ ] Monitor min/max of logu to watch for divergence
@@ -54,6 +59,7 @@ register(
     reward_threshold=1.0,
 )
 ```
+I also placed "simple_env" in classic control folder.
 
 Model-based ground truth comparisons with tabular algorithms:
 
