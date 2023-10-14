@@ -102,7 +102,7 @@ class LogUActor:
         self.actor = Actor(self.env.observation_space, self.env.action_space,
                            [self.hidden_dim, self.hidden_dim],
                            features_extractor=nn.Flatten(),
-                           features_dim=self.nS)
+                           features_dim=self.nS[0])
         # send the actor to device:
         self.actor.to(self.device)
         # TODO: Try a fixed covariance network (no/ignored output)
