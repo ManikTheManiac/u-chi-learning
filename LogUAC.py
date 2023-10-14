@@ -1,4 +1,4 @@
-from stable_baselines3.common.preprocessing import get_action_dim
+from stable_baselines3.common.preprocessing import get_action_dim, get_obs_shape
 import gymnasium as gym
 import numpy as np
 import torch
@@ -24,6 +24,7 @@ class LogUActor:
                  target_update_interval,
                  theta_update_interval,
                  tau,
+                 actor_learning_rate=None,
                  hidden_dim=64,
                  num_nets=2,
                  tau_theta=0.001,
@@ -44,6 +45,7 @@ class LogUActor:
                                  render_mode='human' if render else None)
 
         self.nA = get_action_dim(self.env.action_space)
+        self.nS = get_obs_shape(self.env.observation_space)
         self.beta = beta
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -63,6 +65,8 @@ class LogUActor:
         self.max_grad_norm = max_grad_norm
         self.num_nets = num_nets
         self.prior = None
+        self.actor_learning_rate = actor_learning_rate if \
+            actor_learning_rate is not None else learning_rate
 
         self.replay_buffer = ReplayBuffer(buffer_size=buffer_size,
                                           observation_space=self.env.observation_space,
@@ -85,17 +89,20 @@ class LogUActor:
         self._initialize_networks()
 
     def _initialize_networks(self):
-        self.online_logus = OnlineNets(list_of_nets=[LogUsa(self.env, hidden_dim=self.hidden_dim, device=self.device)
-                                                     for _ in range(self.num_nets)])
-        self.target_logus = TargetNets(list_of_nets=[LogUsa(self.env, hidden_dim=self.hidden_dim, device=self.device)
-                                                     for _ in range(self.num_nets)])
+        self.online_logus = OnlineNets([LogUsa(self.env,
+                                               hidden_dim=self.hidden_dim,
+                                               device=self.device)
+                                        for _ in range(self.num_nets)])
+        self.target_logus = TargetNets([LogUsa(self.env,
+                                               hidden_dim=self.hidden_dim,
+                                               device=self.device)
+                                        for _ in range(self.num_nets)])
         self.target_logus.load_state_dict(
             [logu.state_dict() for logu in self.online_logus])
-        n_features = self.env.observation_space.shape[0]
         self.actor = Actor(self.env.observation_space, self.env.action_space,
                            [self.hidden_dim, self.hidden_dim],
                            features_extractor=nn.Flatten(),
-                           features_dim=n_features,)
+                           features_dim=self.nS)
         # send the actor to device:
         self.actor.to(self.device)
         # TODO: Try a fixed covariance network (no/ignored output)
@@ -103,7 +110,7 @@ class LogUActor:
         opts = [torch.optim.Adam(logu.parameters(), lr=self.learning_rate)
                 for logu in self.online_logus]
         opts.append(torch.optim.Adam(
-            self.actor.parameters(), lr=self.learning_rate / 10))
+            self.actor.parameters(), lr=self.actor_learning_rate))
         self.optimizers = Optimizers(opts)
 
     def train(self,):
@@ -337,7 +344,7 @@ def main():
     env_id = 'HalfCheetah-v4'
     # env_id = 'Ant-v4'
     # env_id = 'Simple-v0'
-    from darer.hparams import cheetah_hparams as config
+    from darer.hparams import cartpole_hparams0 as config
     agent = LogUActor(env_id, **config, device='cuda', log_dir='pend',
                       num_nets=2, learning_starts=100, log_interval=500, render=1, max_grad_norm=10)
     agent.learn(total_timesteps=10_000_000)

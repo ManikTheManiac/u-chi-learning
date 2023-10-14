@@ -11,8 +11,13 @@ env_id = 'Pendulum-v1'
 
 def runner(config=None, run=None):
     # Convert nec kwargs to ints:
-    for int_kwarg in ['batch_size', 'buffer_size', 'gradient_steps', 'target_update_interval', 'train_freq']:
+    for int_kwarg in ['batch_size', 'target_update_interval', 'theta_update_interval']:
         config[int_kwarg] = int(config[int_kwarg])
+    config['buffer_size'] = 1_000_000
+    config['gradient_steps'] = 1
+    config['train_freq'] = 1
+    config['hidden_dim'] = 256
+    config['learning_starts'] = 10_000
     # Remove the "learning_starts" kwarg, for now:
     # config.pop('learning_starts')
     # config.pop('policy_kwargs')
@@ -21,8 +26,8 @@ def runner(config=None, run=None):
     wandb.log({'env_id': env_id})
 
     for _ in range(runs_per_hparam):
-        model = LogUActor(env_id, **config, log_interval=1000, device='cpu')
-        model.learn(total_timesteps=50_000)
+        model = LogUActor(env_id, **config, log_interval=2000, device='cpu')
+        model.learn(total_timesteps=250_000)
         auc += model.eval_auc
     auc /= runs_per_hparam
     wandb.log({'avg_eval_auc': auc})
@@ -45,7 +50,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--count", type=int, default=100)
     parser.add_argument("--entity", type=str, default="jacobhadamczyk")
     parser.add_argument("--project", type=str, default="LogU-Cartpole")
-    parser.add_argument("--sweep_id", type=str, default="ynz7zay1")
+    parser.add_argument("--sweep_id", type=str, default="ph46we8p")
     args = parser.parse_args()
     full_sweep_id = f"{args.entity}/{args.project}/{args.sweep_id}"
 
