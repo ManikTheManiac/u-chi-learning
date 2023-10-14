@@ -23,6 +23,7 @@ eval "$(conda shell.bash hook)"
 conda activate /home/jacob.adamczyk001/miniconda3/envs/oblenv
 export CPATH=$CPATH:$CONDA_PREFIX/include
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CONDA_PREFIX/lib
+export MUJOCO_GL="glfw"
 
 
 echo "Start Run"

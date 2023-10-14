@@ -63,6 +63,9 @@ I also placed "simple_env" in classic control folder.
 
 - Life saver for mujoco setup: https://pytorch.org/rl/reference/generated/knowledge_base/MUJOCO_INSTALLATION.html
 
+- Important line when facing GL error: export MUJOCO_GL="glfw"
+
+
 Model-based ground truth comparisons with tabular algorithms:
 
 ![eigvec](figures/left_eigenvector_MB.png)

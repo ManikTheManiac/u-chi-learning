@@ -5,8 +5,8 @@ from LogUAC import LogUActor
 
 # env_id = 'CartPole-v1'
 # env_id = 'MountainCar-v0'
-# env_id = 'HalfCheetah-v4'
-env_id = 'Pendulum-v1'
+env_id = 'HalfCheetah-v4'
+# env_id = 'Pendulum-v1'
 
 
 def runner(config=None, run=None):
@@ -26,7 +26,8 @@ def runner(config=None, run=None):
     wandb.log({'env_id': env_id})
 
     for _ in range(runs_per_hparam):
-        model = LogUActor(env_id, **config, log_interval=2000, device='cpu')
+        model = LogUActor(env_id, **config, log_interval=2000,
+                          device='cpu', render=0)
         model.learn(total_timesteps=250_000)
         auc += model.eval_auc
     auc /= runs_per_hparam
