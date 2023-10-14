@@ -40,6 +40,8 @@ class LogUActor:
                  ) -> None:
         self.env_id = env_id
         self.env = gym.make(env_id)
+        self.vec_env = gym.make_vec(self.env_id, num_envs=batch_size)
+
         # make another instance for evaluation purposes only:
         self.eval_env = gym.make(env_id,
                                  render_mode='human' if render else None)
@@ -80,6 +82,7 @@ class LogUActor:
         self.theta = torch.Tensor([0]).to(self.device)
         self.eval_auc = 0
         self.num_episodes = 0
+
 
         # Set up the logger:
         self.logger = logger_at_folder(log_dir, algo_name=f'{env_id}')
@@ -122,54 +125,37 @@ class LogUActor:
             states, actions, next_states, dones, rewards = replay
             actor_actions, curr_log_prob = self.actor.action_log_prob(states)
             with torch.no_grad():
-                # TODO: Average over many random actions:
-                # n_samples = 10
-                # prior_actions = np.array([[self.env.action_space.sample() for _ in range(self.num_nets)]
-                #                           for _ in range(n_samples)]).squeeze()
-                # ref_next_state = torch.stack([torch.Tensor(self.ref_next_state) for _ in range(n_samples)], dim=1).squeeze()
-                # prior_actions = torch.Tensor(prior_actions.T).to(self.device)
-                # ref_logu = [logu(ref_next_state.unsqueeze(1), a_s.unsqueeze(1))
-                #             for logu, a_s in zip(self.online_logus, prior_actions)]
-                # ref_chi = torch.stack([torch.exp(ref_logu_val).sum(dim=0)
-                #                        for ref_logu_val in ref_logu], dim=-1) /  n_samples
-                n_samples = 5
-                chi = torch.zeros(n_samples, self.num_nets).to(self.device)
-                for i in range(n_samples):
-                    prior_actions = np.array(
-                        [self.env.action_space.sample() for _ in range(self.num_nets)])
-                    ref_logu = [logu(self.ref_next_state, a)
-                                for logu, a in zip(self.online_logus, prior_actions)]
-                    ref_chi = torch.stack([torch.exp(ref_logu_val)
-                                           for ref_logu_val in ref_logu], dim=-1)
-                    chi[i] = ref_chi
+                # use same number of samples as the batch size for convenience:
+                prior_actions = self.vec_env.action_space.sample()
+                # repeat the ref_next_state n_samples times:
+                ref_next_state = torch.stack([torch.Tensor(self.ref_next_state) for _ in range(self.batch_size)], dim=1).T
+                # Calculate ref_logu for all prior_actions at once
+                ref_logu = [logu(ref_next_state, prior_actions) for logu in self.online_logus]
+                ref_logu = torch.stack(ref_logu, dim=-1)
 
+                # Calculate ref_chi for all samples at once
+                ref_chi = torch.exp(ref_logu)
+                chi = ref_chi.squeeze()
+
+                # Reshape chi to (n_samples, num_nets)
+                chi = chi.view(self.batch_size, self.num_nets)
+
+                # Calculate the mean of chi along the 0th dimension
                 ref_chi = chi.mean(dim=0)
-                # prior_actions = np.array([self.env.action_space.sample() for _ in range(self.num_nets)])
-                # ref_logu = [logu(self.ref_next_state, a)
-                #             for logu, a in zip(self.online_logus, prior_actions)]
-                # ref_chi = torch.stack([torch.exp(ref_logu_val)
-                #                        for ref_logu_val in ref_logu], dim=-1)
                 new_theta = self.ref_reward - torch.log(ref_chi)
-
                 new_thetas[grad_step, :] = new_theta
 
                 # Action by the current actor for the sampled state
                 next_actions_pi, next_log_prob = self.actor.action_log_prob(
                     next_states)
                 next_log_prob = next_log_prob.reshape(-1, 1)
-                ###
-                rand_actions = np.array(
-                    [self.env.action_space.sample() for _ in range(next_states.shape[0])])
-                ###
+                
+                rand_actions = self.vec_env.action_space.sample()
+                
                 target_next_logu = torch.stack([target_logu(next_states, rand_actions)
                                                 for target_logu in self.target_logus], dim=1)
 
                 next_logu, _ = torch.min(target_next_logu, dim=1)
-                ###
-                # for n in range(n_samples):
-                #     rand_actions = np.array([self.env.action_space.sample() for _ in range(next_states.shape[0])])
-                #     target_next_logu = torch.stack([target_logu(next_states, rand_actions)
-                #                                     for target_logu in self.target_logus], dim=1)
 
                 # Need to use importance sampling to get the correct expectation:
                 # next_logu *= torch.exp(-next_log_prob)# + np.log(self.nA))
@@ -248,9 +234,6 @@ class LogUActor:
             state, _ = self.env.reset()
             episode_reward = 0
             done = False
-            # Random choice:
-            # action, _ = self.actor.predict(state)  # , deterministic=True)
-            # action = self.env.action_space.sample()
             self.num_episodes += 1
             self.rollout_reward = 0
             while not done:
@@ -334,15 +317,15 @@ class LogUActor:
 def main():
     # env_id = 'LunarLander-v2'
     env_id = 'Pendulum-v1'
-    # env_id = 'Hopper-v4'
-    env_id = 'HalfCheetah-v4'
+    env_id = 'Hopper-v4'
+    # env_id = 'HalfCheetah-v4'
     # env_id = 'Ant-v4'
     # env_id = 'Simple-v0'
     from darer.hparams import cartpole_hparams0 as config
     agent = LogUActor(env_id, **config, device='cpu',
-                      num_nets=2, learning_starts=100, theta_update_interval=1,
-                      render=0, max_grad_norm=10)
-    agent.learn(total_timesteps=10_000_000)
+                      num_nets=2, learning_starts=5000, theta_update_interval=100,
+                      render=1, max_grad_norm=10)
+    agent.learn(total_timesteps=100_000)
 
 
 if __name__ == '__main__':
