@@ -22,6 +22,7 @@ class LogUActor:
                  batch_size,
                  buffer_size,
                  target_update_interval,
+                 theta_update_interval,
                  tau,
                  hidden_dim=64,
                  num_nets=2,
@@ -51,6 +52,7 @@ class LogUActor:
         self.buffer_size = buffer_size
         self.batch_size = batch_size
         self.target_update_interval = target_update_interval
+        self.theta_update_interval = theta_update_interval
         self.tau = tau
         self.hidden_dim = hidden_dim
         self.gradient_steps = gradient_steps
@@ -106,7 +108,7 @@ class LogUActor:
         opts = [torch.optim.Adam(logu.parameters(), lr=self.learning_rate)
                 for logu in self.online_logus]
         opts.append(torch.optim.Adam(
-            self.actor.parameters(), lr=self.learning_rate))
+            self.actor.parameters(), lr=self.learning_rate / 10))
         self.optimizers = Optimizers(opts)
 
     def train(self,):
@@ -129,7 +131,7 @@ class LogUActor:
                 #             for logu, a_s in zip(self.online_logus, prior_actions)]
                 # ref_chi = torch.stack([torch.exp(ref_logu_val).sum(dim=0)
                 #                        for ref_logu_val in ref_logu], dim=-1) /  n_samples
-                n_samples = 2
+                n_samples = 5
                 chi = torch.zeros(n_samples, self.num_nets).to(self.device)
                 for i in range(n_samples):
                     prior_actions = np.array(
@@ -219,7 +221,7 @@ class LogUActor:
         new_theta = torch.min(new_thetas.mean(dim=0), dim=0)[0]
 
         # new_theta = torch.clamp(new_theta, min=0)
-        if self.env_steps % 100*self.target_update_interval == 0:
+        if self.env_steps % self.theta_update_interval == 0:
             self.theta = self.tau_theta * self.theta + \
                 (1 - self.tau_theta) * new_theta
 
@@ -318,7 +320,7 @@ class LogUActor:
             state, _ = self.eval_env.reset()
             done = False
             while not done:
-                action, _ = self.actor.predict(state)  # , deterministic=True)
+                action, _ = self.actor.predict(state)#, deterministic=True)
                 next_state, reward, terminated, truncated, info = self.eval_env.step(
                     action)
                 avg_reward += reward
@@ -338,12 +340,12 @@ def main():
     # env_id = 'LunarLander-v2'
     env_id = 'Pendulum-v1'
     # env_id = 'Hopper-v4'
-    # env_id = 'HalfCheetah-v4'
+    env_id = 'HalfCheetah-v4'
     # env_id = 'Ant-v4'
     # env_id = 'Simple-v0'
-    from darer.hparams import easy_hparams2 as config
-    agent = LogUActor(env_id, **config, device='cpu', log_dir='pend',
-                      num_nets=2, learning_starts=500, log_interval=500, render=0, max_grad_norm=10)
+    from darer.hparams import cheetah_hparams as config
+    agent = LogUActor(env_id, **config, device='cuda', log_dir='pend',
+                      num_nets=2, learning_starts=100, log_interval=500, render=1, max_grad_norm=10)
     agent.learn(total_timesteps=10_000_000)
 
 
