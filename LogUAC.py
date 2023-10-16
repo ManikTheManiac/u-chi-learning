@@ -125,6 +125,12 @@ class LogUActor:
             states, actions, next_states, dones, rewards = replay
             actor_actions, curr_log_prob = self.actor.action_log_prob(states)
             with torch.no_grad():
+                # Select action according to policy and add clipped noise
+                # noise = actions.clone().data.normal_(0, 0.2)
+                # noise = noise.clamp(-0.2, 0.2).to(self.device)
+                # actor_actions = (actor_actions + noise)#.clamp(-1, 1)
+
+
                 # use same number of samples as the batch size for convenience:
                 prior_actions = self.vec_env.action_space.sample()
                 # repeat the ref_next_state n_samples times:
@@ -157,9 +163,6 @@ class LogUActor:
 
                 next_logu, _ = torch.min(target_next_logu, dim=1)
 
-                # Need to use importance sampling to get the correct expectation:
-                # next_logu *= torch.exp(-next_log_prob)# + np.log(self.nA))
-
                 expected_curr_logu = self.beta * \
                     (rewards + self.theta) + (1 - dones) * next_logu
                 expected_curr_logu = expected_curr_logu.squeeze(1)
@@ -187,7 +190,8 @@ class LogUActor:
             # Increase update counter
             self._n_updates += self.gradient_steps
 
-            actor_loss.backward()
+            if self._n_updates % 10 == 0:
+                actor_loss.backward()
 
             # Clip gradient norm
             loss.backward()
@@ -203,7 +207,6 @@ class LogUActor:
             # record both thetas:
             for idx, theta in enumerate(new_theta.squeeze(0)):
                 self.logger.record(f"train/theta_{idx}", theta.item())
-        # new_thetas = torch.clamp(new_thetas, 0, -10)
         # TODO: Take the mean, then aggregate:
         new_theta = torch.min(new_thetas.mean(dim=0), dim=0)[0]
 
@@ -214,21 +217,7 @@ class LogUActor:
 
     def learn(self, total_timesteps):
         # Start a timer to log fps:
-        t0 = time.thread_time_ns()
-        # Log the hparams:
-        self.logger.record("hparams/beta", self.beta)
-        self.logger.record("hparams/learning_rate", self.learning_rate)
-        self.logger.record("hparams/batch_size", self.batch_size)
-        self.logger.record("hparams/buffer_size", self.buffer_size)
-        self.logger.record("hparams/tau", self.tau)
-        self.logger.record("hparams/tau_theta", self.tau_theta)
-        self.logger.record("hparams/gradient_steps", self.gradient_steps)
-        self.logger.record("hparams/hidden_dim", self.hidden_dim)
-        self.logger.record("hparams/train_freq", self.train_freq)
-        self.logger.record("hparams/max_grad_norm", self.max_grad_norm)
-        self.logger.record("hparams/num_nets", self.num_nets)
-        self.logger.record("hparams/target_update_interval",
-                           self.target_update_interval)
+        self.t0 = time.thread_time_ns()
 
         while self.env_steps < total_timesteps:
             state, _ = self.env.reset()
@@ -241,8 +230,9 @@ class LogUActor:
                     # take a random action:
                     action = self.env.action_space.sample()
                 else:
-                    # , deterministic=True)
                     action, _ = self.actor.predict(state)
+                    # add some noise
+                    action += np.random.normal(0, 0.2, size=action.shape)#.clamp(-0.2, 0.2)
 
                 next_state, reward, terminated, truncated, infos = self.env.step(
                     action)
@@ -254,7 +244,6 @@ class LogUActor:
                     self.ref_reward = reward
                     self.ref_next_state = next_state
 
-                # TODO: Shorten this: (?)
                 if (self.train_freq == -1 and done) or (self.train_freq != -1 and self.env_steps % self.train_freq == 0):
                     if self.replay_buffer.size() > self.learning_starts:
                         self.train()
@@ -269,27 +258,48 @@ class LogUActor:
                 self.replay_buffer.add(
                     state, next_state, action, reward, terminated, infos)
                 state = next_state
-                if self.env_steps % self.log_interval == 0:
-                    # end timer:
-                    t_final = time.thread_time_ns()
-                    # fps averaged over log_interval steps:
-                    fps = self.log_interval / ((t_final - t0) / 1e9)
+                
+                self._log_stats()
 
-                    avg_eval_rwd = self.evaluate()
-                    self.eval_auc += avg_eval_rwd
-                    if self.save_checkpoints:
-                        torch.save(self.online_logu.state_dict(),
-                                   'sql-policy.para')
-                    self.logger.record("time/env. steps", self.env_steps)
-                    self.logger.record("eval/avg_reward", avg_eval_rwd)
-                    self.logger.record("eval/auc", self.eval_auc)
-                    self.logger.record("time/num. episodes", self.num_episodes)
-                    self.logger.record("time/fps", fps)
+    def _log_stats(self):
+        if self.env_steps == 0:
+            # Log the hparams:
+            self.logger.record("hparams/beta", self.beta)
+            self.logger.record("hparams/learning_rate", self.learning_rate)
+            self.logger.record("hparams/batch_size", self.batch_size)
+            self.logger.record("hparams/buffer_size", self.buffer_size)
+            self.logger.record("hparams/tau", self.tau)
+            self.logger.record("hparams/tau_theta", self.tau_theta)
+            self.logger.record("hparams/gradient_steps", self.gradient_steps)
+            self.logger.record("hparams/hidden_dim", self.hidden_dim)
+            self.logger.record("hparams/train_freq", self.train_freq)
+            self.logger.record("hparams/max_grad_norm", self.max_grad_norm)
+            self.logger.record("hparams/num_nets", self.num_nets)
+            self.logger.record("hparams/target_update_interval", self.target_update_interval)
+            self.logger.record("hparams/theta_update_interval", self.theta_update_interval)
+            self.logger.record("hparams/actor_learning_rate", self.actor_learning_rate)
 
-                    self.logger.dump(step=self.env_steps)
-                    t0 = time.thread_time_ns()
+        elif self.env_steps % self.log_interval == 0:
+            # end timer:
+            t_final = time.thread_time_ns()
+            # fps averaged over log_interval steps:
+            fps = self.log_interval / ((t_final - self.t0) / 1e9)
 
-                self.logger.record("rollout/reward", self.rollout_reward)
+            avg_eval_rwd = self.evaluate()
+            self.eval_auc += avg_eval_rwd
+            if self.save_checkpoints:
+                torch.save(self.online_logu.state_dict(),
+                            'sql-policy.para')
+            self.logger.record("time/env. steps", self.env_steps)
+            self.logger.record("eval/avg_reward", avg_eval_rwd)
+            self.logger.record("eval/auc", self.eval_auc)
+            self.logger.record("time/num. episodes", self.num_episodes)
+            self.logger.record("time/fps", fps)
+
+            self.logger.dump(step=self.env_steps)
+            self.t0 = time.thread_time_ns()
+
+        self.logger.record("rollout/reward", self.rollout_reward)
 
     def evaluate(self, n_episodes=1):
         # run the current policy and return the average reward
@@ -309,10 +319,10 @@ class LogUActor:
         avg_reward /= n_episodes
         return avg_reward
 
-    # def save_video(self):
-        # video_env = self.env_id
-        # gym.wrappers.monitoring.video_recorder.VideoRecorder(video_env, path='video.mp4')
-
+    def save_video(self):
+        video_env = self.env_id
+        gym.wrappers.monitoring.video_recorder.VideoRecorder(video_env, path='video.mp4')
+        raise NotImplementedError
 
 def main():
     # env_id = 'LunarLander-v2'
@@ -321,9 +331,10 @@ def main():
     # env_id = 'HalfCheetah-v4'
     # env_id = 'Ant-v4'
     # env_id = 'Simple-v0'
-    from darer.hparams import cartpole_hparams0 as config
-    agent = LogUActor(env_id, **config, device='cpu',
-                      num_nets=2, learning_starts=5000, theta_update_interval=100,
+    from darer.hparams import cheetah_hparams as config
+    agent = LogUActor(env_id, **config, device='cuda',
+                      num_nets=2, learning_starts=5000, theta_update_interval=500,
+                      actor_learning_rate=1e-4, log_dir='pend',
                       render=1, max_grad_norm=10)
     agent.learn(total_timesteps=100_000)
 
