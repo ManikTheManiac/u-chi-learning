@@ -2,17 +2,14 @@ import gymnasium as gym
 import torch
 import numpy as np
 from torch.nn import functional as F
-from gymnasium.wrappers import TimeLimit
 import time
-from ReplayBuffers import Memory, SB3Memory
+from stable_baselines3.common.buffers import ReplayBuffer
 from Models import LogUNet, OnlineNets, Optimizers, TargetNets
 from utils import logger_at_folder
 # raise warning level for debugger:
 import warnings
-warnings.filterwarnings("error")
-from stable_baselines3.common.utils import polyak_update
+# warnings.filterwarnings("error")
 
-TimeLimit()
 class LogULearner:
     def __init__(self,
                  env_id,
@@ -22,24 +19,23 @@ class LogULearner:
                  buffer_size,
                  target_update_interval,
                  tau,
+                 theta_update_interval=1,
                  hidden_dim=64,
                  num_nets=2,
                  tau_theta=0.001,
                  gradient_steps=1,
                  train_freq=-1,
                  max_grad_norm=10,
+                 learning_starts=1000,
                  device='cpu',
+                 render=False,
                  log_dir=None,
                  log_interval=1000,
                  save_checkpoints=False,
                  ) -> None:
         self.env = gym.make(env_id)
-        # timelimit:
-        self.env = TimeLimit(self.env, max_episode_steps=500)
         # make another instance for evaluation purposes only:
-        self.eval_env = gym.make(env_id)
-        # self.eval_env = TimeLimit(self.eval_env, max_episode_steps=500)
-        # self._vec_normalize_env = unwrap_vec_normalize(self.env)
+        self.eval_env = gym.make(env_id, render_mode='human' if render else None)
         self.beta = beta
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -53,16 +49,19 @@ class LogULearner:
         self.save_checkpoints = save_checkpoints
         self.log_interval = log_interval
         self.tau_theta = tau_theta
+        self.theta_update_interval = theta_update_interval
         self.train_freq = train_freq
         self.max_grad_norm = max_grad_norm
         self.num_nets = num_nets
         self.prior = None
+        self.learning_starts = learning_starts
 
         # self.replay_buffer = Memory(buffer_size, device=device)
-        self.replay_buffer = SB3Memory(buffer_size=buffer_size,
+        self.replay_buffer = ReplayBuffer(buffer_size=buffer_size,
                                         observation_space=self.env.observation_space,
                                         action_space=self.env.action_space,
                                         n_envs=1,
+                                        handle_timeout_termination=False,
                                         device=device)
         self.ref_action = None
         self.ref_state = None
@@ -70,11 +69,10 @@ class LogULearner:
         self.theta = torch.Tensor([0]).to(self.device)
         self.eval_auc = 0
         self.num_episodes = 0
-        # self.replay_buffer = ReplayBuffer(buffer_size)
 
         # Set up the logger:
         self.logger = logger_at_folder(
-            log_dir, algo_name=f'hp2{num_nets}nets')
+            log_dir, algo_name=f'maxlstarts')
 
         self._n_updates = 0
         self.env_steps = 0
@@ -95,25 +93,26 @@ class LogULearner:
     def train(self,):
         # replay = self.replay_buffer.sample(self.batch_size, env=self._vec_normalize_env)
         # average self.theta over multiple gradient steps
-        new_thetas = torch.zeros(self.gradient_steps)
+        new_thetas = torch.zeros(self.gradient_steps, self.num_nets).to(self.device)
         for grad_step in range(self.gradient_steps):
             replay = self.replay_buffer.sample(self.batch_size)
-            states, actions, next_states, next_actions, dones, rewards = replay
+            states, actions, next_states, dones, rewards = replay
 
             with torch.no_grad():
                 ref_logu = [logu(self.ref_next_state) for logu in self.online_logus]
                 # since pi0 is same for all, just do exp(ref_logu) and sum over actions:
-                ref_chi = torch.stack([torch.exp(ref_logu_val).sum(dim=-1)
+                ref_chi = torch.stack([torch.exp(ref_logu_val).sum(dim=-1) / self.env.action_space.n
                                        for ref_logu_val in ref_logu], dim=-1)
-                new_theta = self.ref_reward - torch.log(ref_chi)
-                new_thetas[grad_step] = torch.min(new_theta,dim=-1)[0]
-                target_next_logu = torch.cat([target_logu(next_states).squeeze().gather(1, next_actions.long())
+                new_thetas[grad_step, :] = self.ref_reward - torch.log(ref_chi)
+                # target_next_logu = torch.cat([target_logu(next_states).squeeze().gather(1, next_actions.long())
+                #                               for target_logu in self.target_logus], dim=1)
+                target_next_logu = torch.stack([target_logu(next_states).sum(dim=-1) / self.env.action_space.n
                                               for target_logu in self.target_logus], dim=1)
 
-                next_logu, _ = torch.min(target_next_logu, dim=-1, keepdim=True)
-          
-                expected_curr_logu = self.beta * \
-                    (rewards + self.theta) + (1 - dones) * next_logu
+                next_logu, _ = torch.max(target_next_logu, dim=1)
+                next_logu = next_logu.unsqueeze(1)
+
+                expected_curr_logu = self.beta * (rewards + self.theta) + (1 - dones) * next_logu
                 expected_curr_logu = expected_curr_logu.squeeze(1)
 
             curr_logu = torch.cat([online_logu(states).squeeze().gather(1, actions.long())
@@ -121,8 +120,7 @@ class LogULearner:
             
             self.logger.record("train/theta", self.theta.item())
             self.logger.record("train/avg logu", curr_logu.mean().item())
-            # print(curr_logu.shape)
-            # print(expected_curr_logu.shape)
+            
             # Huber loss:
             loss = 0.5*sum(F.smooth_l1_loss(logu, expected_curr_logu) for logu in curr_logu.T)
             # MSE loss:
@@ -144,9 +142,15 @@ class LogULearner:
             # self.logger.record("max_grad", total_norm.item())
             self.optimizers.step()
         # new_thetas = torch.clamp(new_thetas, 0, -1)
+        # Log both theta values:
+        for idx, new_theta in enumerate(new_thetas.T):
+            self.logger.record(f"train/theta_{idx}", new_theta.mean().item())
+        new_theta = torch.max(new_thetas.mean(dim=0), dim=0)[0]
 
-        self.theta = self.tau_theta*self.theta + \
-            (1 - self.tau_theta) * torch.mean(new_thetas)
+        # Can't use env_steps b/c we are inside the learn function which is called only
+        # every train_freq steps:
+        if self._n_updates % self.theta_update_interval == 0:
+            self.theta = self.tau_theta*self.theta + (1 - self.tau_theta) * new_theta
 
     def learn(self, total_timesteps):
         # Start a timer to log fps:
@@ -165,7 +169,11 @@ class LogULearner:
             self.rollout_reward = 0
             while not done:
                 # take a random action:
-                # action = self.env.action_space.sample()
+                if self.env_steps < self.learning_starts:
+                    action = self.env.action_space.sample()
+                else:
+                    action = self.online_logus.choose_action(state)
+
                 next_state, reward, terminated, truncated, infos = self.env.step(action)
                 done = terminated or truncated
                 self.rollout_reward += reward
@@ -176,47 +184,65 @@ class LogULearner:
 
                 # TODO: Shorten this: (?)
                 if (self.train_freq == -1 and terminated) or (self.train_freq != -1 and self.env_steps % self.train_freq == 0):
-                    if self.replay_buffer.size() > self.batch_size:  # or learning_starts?
+                    if self.env_steps > self.learning_starts:
                         self.train()
 
                 if self.env_steps % self.target_update_interval == 0:
                     # Do a Polyak update of parameters:
                     self.target_logus.polyak(self.online_logus, self.tau)
-                    # loop thru the nets and do polyak manually:
-                    # polyak_update(self.online_logus.nets[0].parameters(), self.target_logus.nets[0].parameters(), self.tau)
-                    # polyak_update(self.online_logus.nets[1].parameters(), self.target_logus.nets[1].parameters(), self.tau)
-
+  
                 self.env_steps += 1
-                next_action = self.online_logus.choose_action(next_state)
 
                 episode_reward += reward
                 #TODO: Determine whether this should be done or terminated (or truncated?)
                 # Looks like done (both) works best... possibly because we need continuing env?
                 self.replay_buffer.add(
-                    state, next_state, action, next_action, reward, done)
+                    state, next_state, action, reward, terminated, infos)
                 state = next_state
-                action = next_action
-                if self.env_steps % self.log_interval == 0:
-                    # end timer:
-                    t_final = time.thread_time_ns()
-                    # fps averaged over log_interval steps:
-                    fps = self.log_interval / ((t_final - t0) / 1e9)
+                
+                self._log_stats()
 
-                    avg_eval_rwd = self.evaluate()
-                    self.eval_auc += avg_eval_rwd
-                    if self.save_checkpoints:
-                        torch.save(self.online_logu.state_dict(),
-                                   'sql-policy.para')
-                    self.logger.record("time/env. steps", self.env_steps)
-                    self.logger.record("eval/avg_reward", avg_eval_rwd)
-                    self.logger.record("eval/auc", self.eval_auc)
-                    self.logger.record("time/num. episodes", self.num_episodes)
-                    self.logger.record("time/fps", fps)
-                    self.logger.dump(step=self.env_steps)
-                    t0 = time.thread_time_ns()
-                    self.logger.record("rollout/reward", self.rollout_reward)
+    def _log_stats(self):
+        if self.env_steps == 0:
+            # Log the hparams:
+            self.logger.record("hparams/beta", self.beta)
+            self.logger.record("hparams/learning_rate", self.learning_rate)
+            self.logger.record("hparams/batch_size", self.batch_size)
+            self.logger.record("hparams/buffer_size", self.buffer_size)
+            self.logger.record("hparams/tau", self.tau)
+            self.logger.record("hparams/tau_theta", self.tau_theta)
+            self.logger.record("hparams/gradient_steps", self.gradient_steps)
+            self.logger.record("hparams/hidden_dim", self.hidden_dim)
+            self.logger.record("hparams/train_freq", self.train_freq)
+            self.logger.record("hparams/max_grad_norm", self.max_grad_norm)
+            self.logger.record("hparams/num_nets", self.num_nets)
+            self.logger.record("hparams/target_update_interval", self.target_update_interval)
+            self.logger.record("hparams/theta_update_interval", self.theta_update_interval)
+            self.logger.record("hparams/actor_learning_rate", self.actor_learning_rate)
 
-    def evaluate(self, n_episodes=5):
+        elif self.env_steps % self.log_interval == 0:
+            # end timer:
+            t_final = time.thread_time_ns()
+            # fps averaged over log_interval steps:
+            fps = self.log_interval / ((t_final - self.t0) / 1e9)
+
+            avg_eval_rwd = self.evaluate()
+            self.eval_auc += avg_eval_rwd
+            if self.save_checkpoints:
+                torch.save(self.online_logu.state_dict(),
+                            'sql-policy.para')
+            self.logger.record("time/env. steps", self.env_steps)
+            self.logger.record("eval/avg_reward", avg_eval_rwd)
+            self.logger.record("eval/auc", self.eval_auc)
+            self.logger.record("time/num. episodes", self.num_episodes)
+            self.logger.record("time/fps", fps)
+
+            self.logger.dump(step=self.env_steps)
+            self.t0 = time.thread_time_ns()
+
+        self.logger.record("rollout/reward", self.rollout_reward)
+
+    def evaluate(self, n_episodes=1):
         # run the current policy and return the average reward
         avg_reward = 0.
         for ep in range(n_episodes):
@@ -225,8 +251,6 @@ class LogULearner:
             while not done:
                 action = self.online_logus.greedy_action(state)
                 # action = self.online_logus.choose_action(state)
-                # if ep == 0:
-                # self.eval_env.render()
 
                 next_state, reward, terminated, truncated, info = self.eval_env.step(action)
                 avg_reward += reward
@@ -237,38 +261,24 @@ class LogULearner:
         avg_reward /= n_episodes
         return avg_reward
 
-    @property
-    def _evec_values(self):
-        if isinstance(self.env.observation_space, gym.spaces.Discrete):
-            nS = self.env.observation_space.n
-            nA = self.env.action_space.n
-            logu = np.zeros((nS, nA))
-            for s in range(nS):
-                s_dev = torch.FloatTensor([s]).to(self.device)
-                for a in range(nA):
-                    with torch.no_grad():
-                        logu_ = self.online_logu(s_dev).cpu().squeeze(0)
-                        logu[s, a] = logu_[a].numpy()
-        else:
-            raise NotImplementedError(
-                "Can only provide left e.v. for discrete state spaces.")
-        return np.exp(logu)
-
-
 def main():
     env_id = 'CartPole-v1'
     # env_id = 'Taxi-v3'
     # env_id = 'CliffWalking-v0'
     # env_id = 'Acrobot-v1'
-    # env_id = 'LunarLander-v2'
+    env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
-    env_id = 'MountainCar-v0'
-    from hparams import mcar_hparams2 as config
-    agent = LogULearner(env_id, **config, device='cpu', log_dir='multinasium', num_nets=2)
-    agent.learn(total_timesteps=250_000)
+    # env_id = 'MountainCar-v0'
+    # env_id = 'Drug-v0'
+    from hparams import acrobot_logu as config
+    from CustomDQN import CustomDQN
+    agent = LogULearner(env_id, **config, device='cpu', log_dir='multinasium', num_nets=2, render=True)
+    # agent = CustomDQN(env_id, device='cuda', **config)
+
+    agent.learn(total_timesteps=200_000)
 
 
 if __name__ == '__main__':
-    for _ in range(30):
+    for _ in range(1):
         main()

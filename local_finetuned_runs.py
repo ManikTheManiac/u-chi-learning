@@ -10,8 +10,8 @@ import time
 
 env = 'CartPole-v1'
 # env = 'MountainCar-v0'
-configs = {'logu': cartpole_hparams0, 'dqn': cartpole_dqn}
-
+# algo_to_config = {'logu': cartpole_hparams0, 'dqn': cartpole_dqn}
+# env_to
 
 def runner(algo):
     if algo == 'logu':
@@ -19,7 +19,6 @@ def runner(algo):
             config = cartpole_hparams0
         elif env == 'MountainCar-v0':
             config = mcar_hparams
-        # config = cartpole_hparams0
         algo = LogULearner
     elif algo == 'dqn':
         config = cartpole_dqn
@@ -29,8 +28,8 @@ def runner(algo):
         algo = CustomPPO
 
     model = algo(env, **config, log_dir='ft/cartpole',
-                 device='cpu', log_interval=500, num_nets=1)
-    model.learn(total_timesteps=5_000)
+                 device='cpu', log_interval=500, num_nets=2)
+    model.learn(total_timesteps=50_000)
 
 
 if __name__ == '__main__':

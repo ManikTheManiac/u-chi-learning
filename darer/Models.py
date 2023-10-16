@@ -170,7 +170,7 @@ class OnlineNets():
         with torch.no_grad():
             logu = torch.stack([net(state) for net in self.nets])
             logu = logu.squeeze(1)
-            logu = torch.min(logu, dim=0)[0]
+            logu = torch.max(logu, dim=0)[0]
             greedy_action = logu.argmax()
             # greedy_actions = [net(state).argmax() for net in self.nets]
             # greedy_action = np.random.choice(greedy_actions)

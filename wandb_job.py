@@ -27,7 +27,7 @@ def runner(config=None, run=None):
 
     for _ in range(runs_per_hparam):
         model = LogUActor(env_id, **config, log_interval=2000,
-                          device='cpu', render=0)
+                          device='cuda', render=0)
         model.learn(total_timesteps=250_000)
         auc += model.eval_auc
     auc /= runs_per_hparam

@@ -190,8 +190,8 @@ class LogUActor:
             # Increase update counter
             self._n_updates += self.gradient_steps
 
-            if self._n_updates % 10 == 0:
-                actor_loss.backward()
+            # if self._n_updates % 10 == 0:
+            actor_loss.backward()
 
             # Clip gradient norm
             loss.backward()
@@ -210,7 +210,6 @@ class LogUActor:
         # TODO: Take the mean, then aggregate:
         new_theta = torch.min(new_thetas.mean(dim=0), dim=0)[0]
 
-        # new_theta = torch.clamp(new_theta, min=0)
         if self.env_steps % self.theta_update_interval == 0:
             self.theta = self.tau_theta * self.theta + \
                 (1 - self.tau_theta) * new_theta
@@ -334,7 +333,7 @@ def main():
     from darer.hparams import cheetah_hparams as config
     agent = LogUActor(env_id, **config, device='cuda',
                       num_nets=2, learning_starts=5000, theta_update_interval=500,
-                      actor_learning_rate=1e-4, log_dir='pend',
+                      actor_learning_rate=3e-5, log_dir='pend',
                       render=1, max_grad_norm=10)
     agent.learn(total_timesteps=100_000)
 

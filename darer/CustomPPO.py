@@ -19,14 +19,14 @@ class CustomPPO(PPO):
         self.tensorboard_log = log_dir
 
     def train(self):
-        if self.num_timesteps % self.eval_interval == 0:
-            self.eval_rwd = self.evaluate_agent(5)
+        if self.num_timesteps % (self.eval_interval // 5) == 0:
+            self.eval_rwd = self.evaluate_agent(1)
             self.eval_auc += self.eval_rwd
             self.logger.record("eval/auc", self.eval_auc)
             self.logger.record("eval/avg_reward", self.eval_rwd)
             self.logger.dump(step=self.num_timesteps)
         super().train()
-        self.logger.dump(step=self.num_timesteps)
+        # self.logger.dump(step=self.num_timesteps)
 
     def evaluate_agent(self, n_episodes=1):
         # Run the current policy and return the average reward

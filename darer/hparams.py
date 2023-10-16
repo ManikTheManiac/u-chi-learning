@@ -7,9 +7,9 @@ cartpole_hparams0 = {
     'target_update_interval': 70,
     'tau': 0.85,
     'tau_theta': 0.85,
-    'hidden_dim': 16,
-    'train_freq': 50,
-    'log_interval': 1000
+    'hidden_dim': 64,
+    'train_freq': 20,
+    'learning_starts': 1000
 }
 
 mcar_hparams = {
@@ -17,12 +17,26 @@ mcar_hparams = {
     'batch_size': 950,
     'buffer_size': 53000,
     'gradient_steps': 24,
-    'learning_rate': 7.2e-3,
+    'learning_rate': 7.2e-4,
     'target_update_interval': 270,
     'tau': 0.28,
     'tau_theta': 0.23,
     'hidden_dim': 64,
-    'train_freq': 125
+    'train_freq': 125,
+    'learning_starts': 5000
+}
+
+lunar_hparams = {
+    'beta': 0.18,
+    'batch_size': 800,
+    'buffer_size': 1_000_000,
+    'gradient_steps': 1,
+    'learning_rate': 7.2e-5,
+    'target_update_interval': 270,
+    'tau': 0.28,
+    'tau_theta': 0.23,
+    'hidden_dim': 64,
+    'train_freq': 12
 }
 
 mcar_hparams2 = {
@@ -53,14 +67,14 @@ sac_hparams2 = {
 
 
 easy_hparams2 = {
-    'beta': 10,
+    'beta': 3,
     'batch_size': 512,
     'buffer_size': 1_000_000,
     'gradient_steps': 1,
     'learning_rate': 3e-4,
-    'target_update_interval': 5,
+    'target_update_interval': 1,
     'tau': 0.005,
-    'tau_theta': 0.995,
+    'tau_theta': 0.998,
     'hidden_dim': 256,
     'train_freq': 1
 }
@@ -124,10 +138,24 @@ acrobot_logu = {
     'batch_size': 256,
     'buffer_size': 50_000,
     'gradient_steps': 4,
-    'learning_rate': 3.e-2,
-    'target_update_interval': 1025,
+    'learning_rate': 3.e-4,
+    'target_update_interval': 500,
     'tau': 0.7,
-    'tau_theta': 0.7,
-    'train_freq': 50,
+    'tau_theta': 0.85,
+    'train_freq': 4,
     'hidden_dim': 128,
+    'learning_starts': 10_000
+}
+
+cheetah_hparams = {
+    'batch_size': 600,
+    'beta': 10,
+    'buffer_size': 1_000_000,
+    'gradient_steps': 1,
+    'learning_rate': 3e-4,
+    'target_update_interval': 750,
+    'tau': 0.95,
+    'tau_theta': 0.9,
+    'train_freq': 1,
+    'hidden_dim': 256,
 }
