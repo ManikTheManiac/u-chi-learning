@@ -154,7 +154,7 @@ class LogULearner:
 
     def learn(self, total_timesteps):
         # Start a timer to log fps:
-        t0 = time.thread_time_ns()
+        self.t0 = time.thread_time_ns()
 
         while self.env_steps < total_timesteps:
             state, _ = self.env.reset()
@@ -265,8 +265,8 @@ def main():
     env_id = 'CartPole-v1'
     # env_id = 'Taxi-v3'
     # env_id = 'CliffWalking-v0'
-    # env_id = 'Acrobot-v1'
-    env_id = 'LunarLander-v2'
+    env_id = 'Acrobot-v1'
+    # env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
