@@ -4,11 +4,12 @@ import numpy as np
 from torch.nn import functional as F
 import time
 from stable_baselines3.common.buffers import ReplayBuffer
-from Models import LogUNet, OnlineNets, Optimizers, TargetNets
-from utils import logger_at_folder
+from darer.Models import LogUNet, OnlineNets, Optimizers, TargetNets
+from darer.utils import logger_at_folder
 # raise warning level for debugger:
 import warnings
 # warnings.filterwarnings("error")
+
 
 class LogULearner:
     def __init__(self,
@@ -35,7 +36,8 @@ class LogULearner:
                  ) -> None:
         self.env = gym.make(env_id)
         # make another instance for evaluation purposes only:
-        self.eval_env = gym.make(env_id, render_mode='human' if render else None)
+        self.eval_env = gym.make(
+            env_id, render_mode='human' if render else None)
         self.beta = beta
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -58,11 +60,11 @@ class LogULearner:
 
         # self.replay_buffer = Memory(buffer_size, device=device)
         self.replay_buffer = ReplayBuffer(buffer_size=buffer_size,
-                                        observation_space=self.env.observation_space,
-                                        action_space=self.env.action_space,
-                                        n_envs=1,
-                                        handle_timeout_termination=False,
-                                        device=device)
+                                          observation_space=self.env.observation_space,
+                                          action_space=self.env.action_space,
+                                          n_envs=1,
+                                          handle_timeout_termination=False,
+                                          device=device)
         self.ref_action = None
         self.ref_state = None
         self.ref_reward = None
@@ -93,13 +95,15 @@ class LogULearner:
     def train(self,):
         # replay = self.replay_buffer.sample(self.batch_size, env=self._vec_normalize_env)
         # average self.theta over multiple gradient steps
-        new_thetas = torch.zeros(self.gradient_steps, self.num_nets).to(self.device)
+        new_thetas = torch.zeros(
+            self.gradient_steps, self.num_nets).to(self.device)
         for grad_step in range(self.gradient_steps):
             replay = self.replay_buffer.sample(self.batch_size)
             states, actions, next_states, dones, rewards = replay
 
             with torch.no_grad():
-                ref_logu = [logu(self.ref_next_state) for logu in self.online_logus]
+                ref_logu = [logu(self.ref_next_state)
+                            for logu in self.online_logus]
                 # since pi0 is same for all, just do exp(ref_logu) and sum over actions:
                 ref_chi = torch.stack([torch.exp(ref_logu_val).sum(dim=-1) / self.env.action_space.n
                                        for ref_logu_val in ref_logu], dim=-1)
@@ -107,22 +111,24 @@ class LogULearner:
                 # target_next_logu = torch.cat([target_logu(next_states).squeeze().gather(1, next_actions.long())
                 #                               for target_logu in self.target_logus], dim=1)
                 target_next_logu = torch.stack([target_logu(next_states).sum(dim=-1) / self.env.action_space.n
-                                              for target_logu in self.target_logus], dim=1)
+                                                for target_logu in self.target_logus], dim=1)
 
                 next_logu, _ = torch.max(target_next_logu, dim=1)
                 next_logu = next_logu.unsqueeze(1)
 
-                expected_curr_logu = self.beta * (rewards + self.theta) + (1 - dones) * next_logu
+                expected_curr_logu = self.beta * \
+                    (rewards + self.theta) + (1 - dones) * next_logu
                 expected_curr_logu = expected_curr_logu.squeeze(1)
 
             curr_logu = torch.cat([online_logu(states).squeeze().gather(1, actions.long())
                                    for online_logu in self.online_logus], dim=1)
-            
+
             self.logger.record("train/theta", self.theta.item())
             self.logger.record("train/avg logu", curr_logu.mean().item())
-            
+
             # Huber loss:
-            loss = 0.5*sum(F.smooth_l1_loss(logu, expected_curr_logu) for logu in curr_logu.T)
+            loss = 0.5*sum(F.smooth_l1_loss(logu, expected_curr_logu)
+                           for logu in curr_logu.T)
             # MSE loss:
             # loss = F.mse_loss(curr_logu, expected_curr_logu)
             self.logger.record("train/loss", loss.item())
@@ -150,7 +156,8 @@ class LogULearner:
         # Can't use env_steps b/c we are inside the learn function which is called only
         # every train_freq steps:
         if self._n_updates % self.theta_update_interval == 0:
-            self.theta = self.tau_theta*self.theta + (1 - self.tau_theta) * new_theta
+            self.theta = self.tau_theta*self.theta + \
+                (1 - self.tau_theta) * new_theta
 
     def learn(self, total_timesteps):
         # Start a timer to log fps:
@@ -174,7 +181,8 @@ class LogULearner:
                 else:
                     action = self.online_logus.choose_action(state)
 
-                next_state, reward, terminated, truncated, infos = self.env.step(action)
+                next_state, reward, terminated, truncated, infos = self.env.step(
+                    action)
                 done = terminated or truncated
                 self.rollout_reward += reward
                 if self.env_steps == 0:
@@ -190,16 +198,16 @@ class LogULearner:
                 if self.env_steps % self.target_update_interval == 0:
                     # Do a Polyak update of parameters:
                     self.target_logus.polyak(self.online_logus, self.tau)
-  
+
                 self.env_steps += 1
 
                 episode_reward += reward
-                #TODO: Determine whether this should be done or terminated (or truncated?)
+                # TODO: Determine whether this should be done or terminated (or truncated?)
                 # Looks like done (both) works best... possibly because we need continuing env?
                 self.replay_buffer.add(
                     state, next_state, action, reward, terminated, infos)
                 state = next_state
-                
+
                 self._log_stats()
 
     def _log_stats(self):
@@ -216,9 +224,12 @@ class LogULearner:
             self.logger.record("hparams/train_freq", self.train_freq)
             self.logger.record("hparams/max_grad_norm", self.max_grad_norm)
             self.logger.record("hparams/num_nets", self.num_nets)
-            self.logger.record("hparams/target_update_interval", self.target_update_interval)
-            self.logger.record("hparams/theta_update_interval", self.theta_update_interval)
-            self.logger.record("hparams/actor_learning_rate", self.actor_learning_rate)
+            self.logger.record("hparams/target_update_interval",
+                               self.target_update_interval)
+            self.logger.record("hparams/theta_update_interval",
+                               self.theta_update_interval)
+            self.logger.record("hparams/actor_learning_rate",
+                               self.actor_learning_rate)
 
         elif self.env_steps % self.log_interval == 0:
             # end timer:
@@ -230,7 +241,7 @@ class LogULearner:
             self.eval_auc += avg_eval_rwd
             if self.save_checkpoints:
                 torch.save(self.online_logu.state_dict(),
-                            'sql-policy.para')
+                           'sql-policy.para')
             self.logger.record("time/env. steps", self.env_steps)
             self.logger.record("eval/avg_reward", avg_eval_rwd)
             self.logger.record("eval/auc", self.eval_auc)
@@ -252,7 +263,8 @@ class LogULearner:
                 action = self.online_logus.greedy_action(state)
                 # action = self.online_logus.choose_action(state)
 
-                next_state, reward, terminated, truncated, info = self.eval_env.step(action)
+                next_state, reward, terminated, truncated, info = self.eval_env.step(
+                    action)
                 avg_reward += reward
                 state = next_state
                 done = terminated or truncated
@@ -260,6 +272,7 @@ class LogULearner:
 
         avg_reward /= n_episodes
         return avg_reward
+
 
 def main():
     env_id = 'CartPole-v1'
@@ -273,7 +286,8 @@ def main():
     # env_id = 'Drug-v0'
     from hparams import acrobot_logu as config
     from CustomDQN import CustomDQN
-    agent = LogULearner(env_id, **config, device='cpu', log_dir='multinasium', num_nets=2, render=True)
+    agent = LogULearner(env_id, **config, device='cpu',
+                        log_dir='multinasium', num_nets=2, render=True)
     # agent = CustomDQN(env_id, device='cuda', **config)
 
     agent.learn(total_timesteps=200_000)

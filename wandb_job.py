@@ -21,6 +21,7 @@ def runner(config=None, run=None):
     # Remove the "learning_starts" kwarg, for now:
     # config.pop('learning_starts')
     # config.pop('policy_kwargs')
+    config.pop('actor_learning_rate')
     runs_per_hparam = 3
     auc = 0
     wandb.log({'env_id': env_id})
