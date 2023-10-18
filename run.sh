@@ -2,7 +2,7 @@
 #SBATCH --job-name=u-chi
 #SBATCH --time=23:00:00
 #SBATCH --mem-per-cpu=8gb
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=16
 
 # Set filenames for stdout and stderr.  %j can be used for the jobid.
 # see "filename patterns" section of the sbatch man page for
@@ -30,6 +30,7 @@ echo "Start Run"
 echo `date`
 # python uchi_agent_NN.py
 python wandb_job.py
+# python darer/MultiLogU.py
 # python local_finetuned_runs.py -a logu
 
 # Diagnostic/Logging Information

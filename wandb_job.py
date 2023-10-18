@@ -1,11 +1,11 @@
 import argparse
 import wandb
-# from darer.MultiLogU import LogULearner
-from LogUAC import LogUActor
+from darer.MultiLogU import LogULearner
+# from LogUAC import LogUActor
 
-# env_id = 'CartPole-v1'
+env_id = 'CartPole-v1'
 # env_id = 'MountainCar-v0'
-env_id = 'HalfCheetah-v4'
+# env_id = 'HalfCheetah-v4'
 # env_id = 'Pendulum-v1'
 
 
@@ -13,22 +13,22 @@ def runner(config=None, run=None):
     # Convert nec kwargs to ints:
     for int_kwarg in ['batch_size', 'target_update_interval', 'theta_update_interval']:
         config[int_kwarg] = int(config[int_kwarg])
-    config['buffer_size'] = 1_000_000
+    config['buffer_size'] = 100_000
     config['gradient_steps'] = 1
     config['train_freq'] = 1
-    config['hidden_dim'] = 256
-    config['learning_starts'] = 10_000
+    config['hidden_dim'] = 64
+    config['learning_starts'] = 1_000
     # Remove the "learning_starts" kwarg, for now:
     # config.pop('learning_starts')
     # config.pop('policy_kwargs')
-    runs_per_hparam = 2
+    runs_per_hparam = 3
     auc = 0
     wandb.log({'env_id': env_id})
 
     for _ in range(runs_per_hparam):
-        model = LogUActor(env_id, **config, log_interval=2000,
-                          device='cpu', render=0)
-        model.learn(total_timesteps=250_000)
+        model = LogULearner(env_id, **config, log_interval=500,
+                            device='cpu', render=0)
+        model.learn(total_timesteps=50_000)
         auc += model.eval_auc
     auc /= runs_per_hparam
     wandb.log({'avg_eval_auc': auc})
