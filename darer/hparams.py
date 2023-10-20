@@ -12,6 +12,20 @@ cartpole_hparams0 = {
     'learning_starts': 1000
 }
 
+cartpole_hparams2 = {
+    'batch_size': 860,
+    'beta': 10,
+    'buffer_size': 100_000,
+    'gradient_steps': 1,
+    'learning_rate': 2.5e-2,
+    'target_update_interval': 30,
+    'tau': 0.34,
+    'tau_theta': 0.967,
+    'theta_update_interval': 8,
+    'hidden_dim': 64,
+    'train_freq': 1,
+    'learning_starts': 1000
+}
 mcar_hparams = {
     'beta': 0.78,
     'batch_size': 950,
@@ -105,6 +119,15 @@ cartpole_ppo = {
     'hidden_dim': 64,
 }
 
+acrobot_ppo = {
+    'ent_coef': 0,
+    'gae_lambda': 0.94,
+    'n_epochs': 4,
+    'n_steps': 256,
+    # 'normalize': True,
+    # 'normalize_kwargs': {'norm_obs': True, 'norm_reward': False}
+}
+
 cartpole_hparams1 = {
     'beta': 1.0,
     'batch_size': 256,
@@ -134,17 +157,17 @@ cartpole_dqn = {
 }
 
 acrobot_logu = {
-    'beta': 0.25,
-    'batch_size': 256,
-    'buffer_size': 50_000,
-    'gradient_steps': 4,
-    'learning_rate': 3.e-4,
-    'target_update_interval': 500,
-    'tau': 0.7,
-    'tau_theta': 0.85,
-    'train_freq': 4,
-    'hidden_dim': 128,
-    'learning_starts': 10_000
+    'beta': 0.2,
+    'batch_size': 855,
+    'buffer_size': 100_000,
+    'gradient_steps': 1,
+    'learning_rate': 7.e-3,
+    'target_update_interval': 6,
+    'tau': 0.57,
+    'tau_theta': 0.90,
+    'train_freq': 1,
+    'hidden_dim': 64,
+    'learning_starts': 1_000
 }
 
 cheetah_hparams = {
@@ -152,10 +175,24 @@ cheetah_hparams = {
     'beta': 10,
     'buffer_size': 1_000_000,
     'gradient_steps': 1,
-    'learning_rate': 3e-4,
-    'target_update_interval': 750,
-    'tau': 0.95,
+    'learning_rate': 8e-6,
+    'target_update_interval': 10,
+    'tau': 0.995,
     'tau_theta': 0.9,
     'train_freq': 1,
-    'hidden_dim': 256,
+    'hidden_dim': 64,
+}
+
+
+cheetah_hparams2 = {
+    'batch_size': 200,
+    'beta': 5,
+    'buffer_size': 1_000_000,
+    'gradient_steps': 1,
+    'learning_rate': 3e-4,
+    'target_update_interval': 15,
+    'tau': 0.99,
+    'tau_theta': 0.9,
+    'train_freq': 1,
+    'hidden_dim': 128,
 }

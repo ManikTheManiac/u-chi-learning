@@ -10,6 +10,7 @@ sns.set_theme(style="darkgrid")
 algo_to_log_interval = {'DQN': 500, 'PPO': 4000,
                         'LogU0': 500, 'RawLik': 500, 'LogU2nets': 500}
 
+desired_algos = ['PPO', 'newtuned', '1kls']
 
 def plotter(folder, metrics=['step', 'eval/avg_reward']):
     # First, scan the folder for the different algorithms:
@@ -21,6 +22,9 @@ def plotter(folder, metrics=['step', 'eval/avg_reward']):
     subfolders = [f for f in subfolders if not f.endswith('.png')]
     for subfolder in subfolders:
         algo_name = subfolder.split('_')[0]
+        if algo_name not in desired_algos:
+            continue
+
         if algo_name not in algos:
             algos.append(algo_name)
         
@@ -30,7 +34,7 @@ def plotter(folder, metrics=['step', 'eval/avg_reward']):
 
         # Convert the tensorboard file to a pandas dataframe:
         log_file = f'{folder}/{subfolder}/{file}'
-        print("Processing", log_file, "...")
+        print("Processing", subfolder, "...")
         reader = SummaryReader(log_file)
         df = reader.scalars
         # filter the desired metrics:
@@ -72,7 +76,7 @@ if __name__ == '__main__':
     # plotter('ft/benchmark/cartpole')
     # plotter('ft/benchmark/mountaincar')
 
-    folder = 'ft/cartpole'
+    folder = 'ft/acro'
     # folder = 'ft/benchmark'
     # folder = 'multinasium'
     # plotter(folder=folder, metrics=['step', 'train/loss', 'loss'])
