@@ -1,7 +1,8 @@
 import argparse
 import wandb
-from darer.MultiLogU import LogULearner
-from LogUAC import LogUActor
+# from darer.MultiLogU import LogULearner
+# from LogUAC import LogUActor
+from new_logac import LogUActor
 
 # env_id = 'CartPole-v1'
 # env_id = 'MountainCar-v0'
