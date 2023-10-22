@@ -5,6 +5,8 @@ import torch
 from torch.nn import functional as F
 from torch import nn
 import time
+
+import wandb
 from darer.Models import OnlineNets, Optimizers, TargetNets, LogUsa, GaussianPolicy
 from darer.utils import logger_at_folder
 from stable_baselines3.common.buffers import ReplayBuffer
@@ -302,6 +304,7 @@ class LogUActor:
                 #                        param.data.mean().item())
 
                 self.logger.dump(step=self.env_steps)
+                wandb.log({'env step': self.env_steps, 'avg_eval_rwd': avg_eval_rwd})
                 self.t0 = time.thread_time_ns()
 
             self.logger.record("rollout/reward", self.rollout_reward)
