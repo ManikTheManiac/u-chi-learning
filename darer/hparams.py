@@ -177,7 +177,7 @@ cheetah_hparams = {
     'gradient_steps': 1,
     'learning_rate': 8e-6,
     'target_update_interval': 10,
-    'tau': 0.995,
+    'tau': 0.99,
     'tau_theta': 0.9,
     'train_freq': 1,
     'hidden_dim': 64,
@@ -185,8 +185,8 @@ cheetah_hparams = {
 
 
 cheetah_hparams2 = {
-    'batch_size': 200,
-    'beta': 5,
+    'batch_size': 300,
+    'beta': 1,
     'buffer_size': 1_000_000,
     'gradient_steps': 1,
     'learning_rate': 3e-4,

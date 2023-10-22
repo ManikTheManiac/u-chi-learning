@@ -232,31 +232,34 @@ def weights_init_(m):
         torch.nn.init.constant_(m.bias, 0)
 
 class GaussianPolicy(nn.Module):
-    def __init__(self, num_inputs, num_actions, hidden_dim, observation_space, action_space):
+    def __init__(self, hidden_dim, observation_space, action_space, device='cpu'):
         super(GaussianPolicy, self).__init__()
+        self.device = device
+        num_inputs = get_flattened_obs_dim(observation_space)
+        num_actions = get_action_dim(action_space)
         
-        self.linear1 = nn.Linear(num_inputs, hidden_dim)
-        self.linear2 = nn.Linear(hidden_dim, hidden_dim)
+        self.linear1 = nn.Linear(num_inputs, hidden_dim, device=self.device)
+        self.linear2 = nn.Linear(hidden_dim, hidden_dim, device=self.device)
 
-        self.mean_linear = nn.Linear(hidden_dim, num_actions)
-        self.log_std_linear = nn.Linear(hidden_dim, num_actions)
+        self.mean_linear = nn.Linear(hidden_dim, num_actions, device=self.device)
+        self.log_std_linear = nn.Linear(hidden_dim, num_actions, device=self.device)
 
         self.apply(weights_init_)
 
         # action rescaling
         if action_space is None:
-            self.action_scale = torch.tensor(1.)
-            self.action_bias = torch.tensor(0.)
+            self.action_scale = torch.tensor(1., device=self.device)
+            self.action_bias = torch.tensor(0., device=self.device)
         else:
             self.action_scale = torch.FloatTensor(
-                (action_space.high - action_space.low) / 2.)
+                (action_space.high - action_space.low) / 2.)#, device=self.device)
             self.action_bias = torch.FloatTensor(
-                (action_space.high + action_space.low) / 2.)
+                (action_space.high + action_space.low) / 2.)#, device=self.device)
             
         self.observation_space = observation_space
 
     def forward(self, obs):
-        obs = torch.Tensor(obs)#.to(self.device)
+        obs = torch.Tensor(obs).to(self.device)
         obs = preprocess_obs(obs, self.observation_space)
         x = F.relu(self.linear1(obs))
         x = F.relu(self.linear2(x))
@@ -275,11 +278,9 @@ class GaussianPolicy(nn.Module):
         log_prob = normal.log_prob(x_t)
         # Enforcing Action Bound
         log_prob -= torch.log(self.action_scale * (1 - y_t.pow(2)) + epsilon)
-        # print(state)
-        # print(log_prob)
         log_prob = log_prob.sum(-1, keepdim=True)
         mean = torch.tanh(mean) * self.action_scale + self.action_bias
-        # print(mean, action, log_prob)
+
         return action, log_prob, mean
 
     def to(self, device):
