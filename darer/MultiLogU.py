@@ -4,8 +4,9 @@ import numpy as np
 from torch.nn import functional as F
 import time
 from stable_baselines3.common.buffers import ReplayBuffer
-from darer.Models import LogUNet, OnlineNets, Optimizers, TargetNets
-from darer.utils import logger_at_folder
+import wandb
+from Models import LogUNet, OnlineNets, Optimizers, TargetNets
+from utils import logger_at_folder
 # raise warning level for debugger:
 import warnings
 # warnings.filterwarnings("error")
@@ -33,6 +34,7 @@ class LogULearner:
                  log_dir=None,
                  log_interval=1000,
                  save_checkpoints=False,
+                 use_wandb=False,
                  ) -> None:
         self.env = gym.make(env_id)
         # make another instance for evaluation purposes only:
@@ -57,6 +59,7 @@ class LogULearner:
         self.num_nets = num_nets
         self.prior = None
         self.learning_starts = learning_starts
+        self.use_wandb = use_wandb
 
         # self.replay_buffer = Memory(buffer_size, device=device)
         self.replay_buffer = ReplayBuffer(buffer_size=buffer_size,
@@ -73,8 +76,7 @@ class LogULearner:
         self.num_episodes = 0
 
         # Set up the logger:
-        self.logger = logger_at_folder(
-            log_dir, algo_name=f'maxlstarts')
+        self.logger = logger_at_folder(log_dir, algo_name=f'acro1')
 
         self._n_updates = 0
         self.env_steps = 0
@@ -113,7 +115,7 @@ class LogULearner:
                 target_next_logu = torch.stack([target_logu(next_states).sum(dim=-1) / self.env.action_space.n
                                                 for target_logu in self.target_logus], dim=1)
 
-                next_logu, _ = torch.max(target_next_logu, dim=1)
+                next_logu, _ = torch.min(target_next_logu, dim=1)
                 next_logu = next_logu.unsqueeze(1)
 
                 expected_curr_logu = self.beta * \
@@ -122,7 +124,6 @@ class LogULearner:
 
             curr_logu = torch.cat([online_logu(states).squeeze().gather(1, actions.long())
                                    for online_logu in self.online_logus], dim=1)
-
             self.logger.record("train/theta", self.theta.item())
             self.logger.record("train/avg logu", curr_logu.mean().item())
 
@@ -247,7 +248,8 @@ class LogULearner:
             self.logger.record("eval/auc", self.eval_auc)
             self.logger.record("time/num. episodes", self.num_episodes)
             self.logger.record("time/fps", fps)
-
+            if self.use_wandb:
+                wandb.log({'env_steps': self.env_steps,'eval/avg_reward': avg_eval_rwd})
             self.logger.dump(step=self.env_steps)
             self.t0 = time.thread_time_ns()
 
@@ -278,16 +280,15 @@ def main():
     env_id = 'CartPole-v1'
     # env_id = 'Taxi-v3'
     # env_id = 'CliffWalking-v0'
-    env_id = 'Acrobot-v1'
+    # env_id = 'Acrobot-v1'
     # env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
     # env_id = 'Drug-v0'
     from hparams import acrobot_logu as config
-    from CustomDQN import CustomDQN
     agent = LogULearner(env_id, **config, device='cpu',
-                        log_dir='multinasium', num_nets=2, render=True)
+                        log_dir='multinasium', num_nets=1, render=True)
     # agent = CustomDQN(env_id, device='cuda', **config)
 
     agent.learn(total_timesteps=200_000)
