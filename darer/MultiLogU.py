@@ -4,8 +4,9 @@ import numpy as np
 from torch.nn import functional as F
 import time
 from stable_baselines3.common.buffers import ReplayBuffer
-from Models import LogUNet, OnlineNets, Optimizers, TargetNets
-from utils import logger_at_folder
+import wandb
+from darer.Models import LogUNet, OnlineNets, Optimizers, TargetNets
+from darer.utils import logger_at_folder
 # raise warning level for debugger:
 import warnings
 # warnings.filterwarnings("error")
@@ -154,7 +155,7 @@ class LogULearner:
 
     def learn(self, total_timesteps):
         # Start a timer to log fps:
-        t0 = time.thread_time_ns()
+        self.t0 = time.thread_time_ns()
 
         while self.env_steps < total_timesteps:
             state, _ = self.env.reset()
@@ -236,7 +237,7 @@ class LogULearner:
             self.logger.record("eval/auc", self.eval_auc)
             self.logger.record("time/num. episodes", self.num_episodes)
             self.logger.record("time/fps", fps)
-
+            wandb.log({"eval/average_reward": avg_eval_rwd})
             self.logger.dump(step=self.env_steps)
             self.t0 = time.thread_time_ns()
 
@@ -273,7 +274,7 @@ def main():
     # env_id = 'Drug-v0'
     from hparams import acrobot_logu as config
     from CustomDQN import CustomDQN
-    agent = LogULearner(env_id, **config, device='cpu', log_dir='multinasium', num_nets=2, render=True)
+    agent = LogULearner(env_id, **config, device='cpu', log_dir='Exp_gymnasium', num_nets=2, render=True)
     # agent = CustomDQN(env_id, device='cuda', **config)
 
     agent.learn(total_timesteps=200_000)
