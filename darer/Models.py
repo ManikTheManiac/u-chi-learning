@@ -176,10 +176,19 @@ class OnlineNets():
             # greedy_action = np.random.choice(greedy_actions)
         return greedy_action.item()
 
-    def choose_action(self, state):
+    def choose_action(self, state, prior=None):
         # Get a sample from each net, then sample uniformly over them:
         actions = [net.choose_action(state) for net in self.nets]
-        action = np.random.choice(actions)
+        if prior is None:
+            action = np.random.choice(actions)
+        else:
+            # Use the prior to weight the actions:
+            p_actions = [net(state) for net in prior.nets]
+            # mix the two "experts":
+            p_actions = torch.stack(p_actions)
+            p_actions = p_actions * prior
+
+            action = np.random.choice(actions, p=prior)
         # perhaps re-weight this based on pessimism?
         return action
 
@@ -274,14 +283,14 @@ class GaussianPolicy(nn.Module):
         normal = Normal(mean, std)
         x_t = normal.rsample()  # for reparameterization trick (mean + std * N(0,1))
         y_t = torch.tanh(x_t)
-        action = y_t * self.action_scale + self.action_bias
+        noisy_action = y_t * self.action_scale + self.action_bias
         log_prob = normal.log_prob(x_t)
         # Enforcing Action Bound
         log_prob -= torch.log(self.action_scale * (1 - y_t.pow(2)) + epsilon)
         log_prob = log_prob.sum(-1, keepdim=True)
         mean = torch.tanh(mean) * self.action_scale + self.action_bias
 
-        return action, log_prob, mean
+        return noisy_action, log_prob, mean
 
     def to(self, device):
         self.action_scale = self.action_scale.to(device)
