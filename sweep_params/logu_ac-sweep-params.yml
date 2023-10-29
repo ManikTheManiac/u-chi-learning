@@ -1,0 +1,40 @@
+method: bayes
+metric:
+  goal: maximize
+  name: avg_eval_auc
+parameters:
+  actor_learning_rate:
+    distribution: log_uniform_values
+    max: 0.01
+    min: 0.00005
+  batch_size:
+    distribution: uniform
+    max: 1000
+    min: 100
+  beta:
+    distribution: uniform
+    max: 10
+    min: 0.5
+  learning_rate:
+    distribution: log_uniform_values
+    max: 0.01
+    min: 0.00005
+  target_update_interval:
+    distribution: log_uniform_values
+    max: 5000
+    min: 1
+  tau:
+    distribution: uniform
+    max: 1
+    min: 0.001
+  tau_theta:
+    distribution: log_uniform_values
+    max: 1
+    min: 0.7
+  theta_update_interval:
+    distribution: log_uniform_values
+    max: 1000
+    min: 1
+  hidden_dim:
+    values: [64, 128, 256]
+program: wandb_job.py

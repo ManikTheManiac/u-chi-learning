@@ -1,12 +1,13 @@
 import argparse
 import wandb
-# from darer.MultiLogU import LogULearner
+from darer.MultiLogU import LogULearner
 # from LogUAC import LogUActor
-from new_logac import LogUActor
+# from new_logac import LogUActor
 
 # env_id = 'CartPole-v1'
 # env_id = 'MountainCar-v0'
-env_id = 'HalfCheetah-v4'
+env_id = 'LunarLander-v2'
+# env_id = 'HalfCheetah-v4'
 # env_id = 'Pendulum-v1'
 
 
@@ -14,7 +15,7 @@ def runner(config=None, run=None):
     # Convert nec kwargs to ints:
     for int_kwarg in ['batch_size', 'target_update_interval', 'theta_update_interval']:
         config[int_kwarg] = int(config[int_kwarg])
-    config['buffer_size'] = 1_000_000
+    config['buffer_size'] = 150_000
     config['gradient_steps'] = 1
     config['train_freq'] = 1
     # config['hidden_dim'] = 64
@@ -22,15 +23,15 @@ def runner(config=None, run=None):
     # Remove the "learning_starts" kwarg, for now:
     # config.pop('learning_starts')
     # config.pop('policy_kwargs')
-    # config.pop('actor_learning_rate')
+    config.pop('actor_learning_rate')
     runs_per_hparam = 2
     auc = 0
     wandb.log({'env_id': env_id})
 
     for _ in range(runs_per_hparam):
-        model = LogUActor(env_id, **config, log_interval=500,
+        model = LogULearner(env_id, **config, log_interval=500,
                             device='cuda', render=0)
-        model.learn(total_timesteps=300_000)
+        model.learn(total_timesteps=150_000)
         auc += model.eval_auc
     auc /= runs_per_hparam
     wandb.log({'avg_eval_auc': auc})
