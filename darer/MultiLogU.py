@@ -89,7 +89,7 @@ class LogULearner:
                                                      for _ in range(self.num_nets)])
         self.target_logus = TargetNets(list_of_nets=[LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
                                                      for _ in range(self.num_nets)])
-        self.target_logus.load_state_dict(
+        self.target_logus.load_state_dicts(
             [logu.state_dict() for logu in self.online_logus])
         # Make (all) LogUs learnable:
         opts = [torch.optim.Adam(logu.parameters(), lr=self.learning_rate)
@@ -209,6 +209,8 @@ class LogULearner:
                 self.env_steps += 1
 
                 episode_reward += reward
+                # action = torch.Tensor([action]).to(self.device)
+                action = np.array([action])
                 self.replay_buffer.add(
                     state, next_state, action, reward, terminated, infos)
                 state = next_state
@@ -265,8 +267,12 @@ class LogULearner:
         for ep in range(n_episodes):
             state, _ = self.eval_env.reset()
             done = False
+            agreed = 0
+            n_steps = 0
             while not done:
-                action = self.online_logus.greedy_action(state)
+                action, agree = self.online_logus.greedy_action(state)
+                agreed += agree
+                n_steps += 1
                 # action = self.online_logus.choose_action(state)
 
                 next_state, reward, terminated, truncated, info = self.eval_env.step(
@@ -274,6 +280,7 @@ class LogULearner:
                 avg_reward += reward
                 state = next_state
                 done = terminated or truncated
+            print(f"agreed: {agreed/n_steps}")
             # self.eval_env.close()
 
         avg_reward /= n_episodes
@@ -283,19 +290,19 @@ class LogULearner:
 def main():
     env_id = 'CartPole-v1'
     # env_id = 'Taxi-v3'
-    # env_id = 'CliffWalking-v0'
+    env_id = 'CliffWalking-v0'
     # env_id = 'Acrobot-v1'
-    env_id = 'LunarLander-v2'
+    # env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
     # env_id = 'Drug-v0'
-    from hparams import lunar_hparams_logu as config
-    agent = LogULearner(env_id, **config, device='cuda',
-                        log_dir='pend', num_nets=2, render=False)
+    from hparams import mcar_hparams2 as config
+    agent = LogULearner(env_id, **config, device='cuda', log_interval=1000,
+                        log_dir='pend', num_nets=2, render=0)
     # agent = CustomDQN(env_id, device='cuda', **config)
 
-    agent.learn(total_timesteps=100_000)
+    agent.learn(total_timesteps=1_000_000)
 
 
 if __name__ == '__main__':

@@ -44,13 +44,14 @@ class LogUNet(nn.Module):
             logu = self.forward(state)
 
             if greedy:
-                a = (logu * prior).argmax()
+                # not worth exponentiating since it is monotonic
+                a = (logu * prior).argmax(dim=-1)
                 return a.item()
 
             # First subtract a baseline:
             logu = logu - (torch.max(logu) + torch.min(logu))/2
             dist = torch.exp(logu) * prior
-            dist = dist / torch.sum(dist)
+            # dist = dist / torch.sum(dist)
             c = Categorical(dist)
             a = c.sample()
 
@@ -125,68 +126,199 @@ class Optimizers():
 class TargetNets():
     def __init__(self, list_of_nets):
         self.nets = list_of_nets
+    def __len__(self):
+        return len(self.nets)
 
     def __iter__(self):
         return iter(self.nets)
 
-    def load_state_dict(self, list_of_state_dicts):
-        for new_state, net in zip(list_of_state_dicts, self.nets):
-            net.load_state_dict(new_state)
+    def load_state_dicts(self, list_of_state_dicts):
+        """
+        Load state dictionaries into target networks.
 
-    def polyak(self, new_nets_list, tau):
+        Args:
+            list_of_state_dicts (list): A list of state dictionaries to load into the target networks.
+
+        Raises:
+            ValueError: If the number of state dictionaries does not match the number of target networks.
+        """
+        if len(list_of_state_dicts) != len(self):
+            raise ValueError("Number of state dictionaries does not match the number of target networks.")
+        
+        for new_state, target_net in zip(list_of_state_dicts, self):
+            target_net.load_state_dict(new_state)
+
+    def polyak(self, online_nets, tau):
+        """
+        Perform a Polyak (exponential moving average) update for target networks.
+
+        Args:
+            online_nets (list): A list of online networks whose parameters will be used for the update.
+            tau (float): The update rate, typically between 0 and 1.
+
+        Raises:
+            ValueError: If the number of online networks does not match the number of target networks.
+        """
+        if len(online_nets) != len(self.nets):
+            raise ValueError("Number of online networks does not match the number of target networks.")
+
         with torch.no_grad():
-            # zip does not raise an exception if length of parameters does not match.
-            for new_params, target_params in zip(new_nets_list.parameters(), self.parameters()):
-                for new_param, target_param in zip_strict(new_params, target_params):
-                    # target_param.data.mul_(tau)
-                    # new_param.data.mul_(1 - tau)
-                    # target_param.data.add_(new_param.data)
-                    target_param.data.mul_(tau).add_(new_param.data, alpha=1.0-tau)
-                    # torch.add(target_param.data, new_param.data, out=target_param.data)
+            for online_net, target_net in zip(online_nets, self.nets):
+                for online_param, target_param in zip(online_net.parameters(), target_net.parameters()):
+                    target_param.data.mul_(tau).add_(online_param.data, alpha=1.0 - tau)
 
     def parameters(self):
+        """
+        Get the parameters of all target networks.
+
+        Returns:
+            list: A list of network parameters for each target network.
+        """
         return [net.parameters() for net in self.nets]
 
 
-class OnlineNets():
+import torch
+import torch.distributions as dist
+
+class OnlineNets:
+    """
+    A utility class for managing online networks in reinforcement learning.
+
+    Args:
+        list_of_nets (list): A list of online networks.
+    """
+
     def __init__(self, list_of_nets):
         self.nets = list_of_nets
+
+    def __len__(self):
+        return len(self.nets)
 
     def __iter__(self):
         return iter(self.nets)
 
     def greedy_action(self, state):
+        """
+        Select a greedy action based on the online networks.
+
+        Args:
+            state (torch.Tensor): The input state.
+
+        Returns:
+            int: The index of the greedy action.
+        """
         with torch.no_grad():
-            logu = torch.stack([net(state) for net in self.nets])
-            logu = logu.squeeze(1)
+            logu_stacked = torch.stack([net(state) for net in self])
+            logu = logu_stacked.squeeze(1)
             logu = torch.min(logu, dim=0)[0]
             greedy_action = logu.argmax()
-            # greedy_actions = [net(state).argmax() for net in self.nets]
-            # greedy_action = np.random.choice(greedy_actions)
-        return greedy_action.item()
+            # check if the nets agree:
+            all_greedys = logu_stacked.argmax(dim=-1)
+            agreed = torch.all(all_greedys == greedy_action)
+            # print(agreed)
+        return greedy_action.item(), agreed
 
     def choose_action(self, state, prior=None):
-        # Get a sample from each net, then sample uniformly over them:
-        actions = [net.choose_action(state) for net in self.nets]
-        if prior is None:
-            action = np.random.choice(actions)
-        else:
-            # Use the prior to weight the actions:
-            p_actions = [net(state) for net in prior.nets]
-            # mix the two "experts":
-            p_actions = torch.stack(p_actions)
-            p_actions = p_actions * prior
+        # Validate the input state
+        # assert isinstance(state, torch.Tensor), "Input state must be a PyTorch tensor"
+        # assert state.shape == (batch_size, state_dim), "Invalid state shape"
 
-            action = np.random.choice(actions, p=prior)
-        # perhaps re-weight this based on pessimism?
-        return action
+        # Get actions from each network
+        logus = torch.stack([net.forward(state) for net in self])
+        logus = logus.squeeze(1)
+        logu = torch.min(logus, dim=0)[0] # pessimistic values for approximation of true value
+        
+        # print(actions)
+        if prior is None:
+            # If no prior is provided, sample uniformly
+            # action = np.random.choice(actions)
+            
+            # First subtract a baseline:
+            logu = logu - (torch.max(logu) + torch.min(logu))/2
+            # print(u)
+            u = torch.exp(logu)
+            dist = u * 1 / 2
+            dist = dist / torch.sum(dist)
+            # print(dist)
+            c = Categorical(dist)
+            action = c.sample()
+
+            # action = actions[0]
+        # else:
+        #     # Ensure that prior is a list of weights (e.g., [0.2, 0.3, 0.5])
+        #     assert isinstance(prior, list), "Prior must be a list of weights"
+        #     assert len(prior) == len(actions), "Prior length must match the number of networks"
+
+        #     # Normalize the prior weights to create a probability distribution
+        #     prior_prob = [weight / sum(prior) for weight in prior]
+
+        #     # Sample an action based on the prior distribution
+        #     action = np.random.choice(actions, p=prior_prob)
+
+        return action.item()
 
     def parameters(self):
-        return [net.parameters() for net in self.nets]
+        """
+        Get the parameters of all online networks.
+
+        Returns:
+            list: A list of network parameters for each online network.
+        """
+        return [net.parameters() for net in self]
 
     def clip_grad_norm(self, max_grad_norm):
-        for net in self.nets:
+        """
+        Clip gradients for all online networks.
+
+        Args:
+            max_grad_norm (float): Maximum gradient norm for clipping.
+        """
+        for net in self:
             torch.nn.utils.clip_grad_norm_(net.parameters(), max_grad_norm)
+
+
+# class OnlineNets():
+#     def __init__(self, list_of_nets):
+#         self.nets = list_of_nets
+
+#     def __len__(self):
+#         return len(self.nets)
+
+#     def __iter__(self):
+#         return iter(self.nets)
+
+#     def greedy_action(self, state):
+#         with torch.no_grad():
+#             logu = torch.stack([net(state) for net in self.nets])
+#             logu = logu.squeeze(1)
+#             logu = torch.min(logu, dim=0)[0]
+#             greedy_action = logu.argmax()
+#             # greedy_actions = [net(state).argmax() for net in self.nets]
+#             # greedy_action = np.random.choice(greedy_actions)
+#         return greedy_action.item()
+
+#     def choose_action(self, state, prior=None):
+#         # Get a sample from each net, then sample uniformly over them:
+#         actions = [net.choose_action(state) for net in self.nets]
+#         if prior is None:
+#             action = np.random.choice(actions)
+#         else:
+#             # Use the prior to weight the actions:
+#             p_actions = [net(state) for net in prior.nets]
+#             # mix the two "experts":
+#             p_actions = torch.stack(p_actions)
+#             p_actions = p_actions * prior
+
+#             action = np.random.choice(actions, p=prior)
+#         # perhaps re-weight this based on pessimism?
+#         return action
+
+#     def parameters(self):
+#         return [net.parameters() for net in self.nets]
+
+#     def clip_grad_norm(self, max_grad_norm):
+#         for net in self.nets:
+#             torch.nn.utils.clip_grad_norm_(net.parameters(), max_grad_norm)
 
 class LogUsa(nn.Module):
     def __init__(self, env, hidden_dim=256, device='cuda'):

@@ -29,9 +29,9 @@ def runner(config=None, run=None):
     wandb.log({'env_id': env_id})
 
     for _ in range(runs_per_hparam):
-        model = LogULearner(env_id, **config, log_interval=500,
+        model = LogULearner(env_id, **config, log_interval=500, use_wandb=True,
                             device='cuda', render=0)
-        model.learn(total_timesteps=150_000)
+        model.learn(total_timesteps=250_000)
         auc += model.eval_auc
     auc /= runs_per_hparam
     wandb.log({'avg_eval_auc': auc})
