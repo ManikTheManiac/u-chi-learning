@@ -10,9 +10,9 @@ sns.set_theme(style="darkgrid")
 algo_to_log_interval = {'DQN': 500, 'PPO': 4000,
                         'LogU0': 500, 'RawLik': 500, 'LogU2nets': 500}
 
-desired_algos = ['PPO', 'newtuned', '1kls']
+desired_algos = ['PPO', 'newtuned', '1kls', 'acro1']
 
-def plotter(folder, metrics=['step', 'eval/avg_reward']):
+def plotter(folder, metrics=['step', 'eval/avg_reward'], ylim=None):
     # First, scan the folder for the different algorithms:
     algos = []
     plt.figure()
@@ -60,7 +60,8 @@ def plotter(folder, metrics=['step', 'eval/avg_reward']):
     for algo in algos:
         plt.plot([], [], ' ', label=f'{algo} ({len(algo_data[algo_data["algo"] == algo]["run"].unique())} runs)')
     plt.legend()
-    # plt.xlim(0, 100000)
+    if ylim is not None:
+        plt.ylim(ylim)
     plt.xlabel('Environment Steps')
     plt.ylabel(metrics[1])
     # Use the y value as the filename, but strip before the first slash:
@@ -76,11 +77,11 @@ if __name__ == '__main__':
     # plotter('ft/benchmark/cartpole')
     # plotter('ft/benchmark/mountaincar')
 
-    folder = 'ft/acro'
+    folder = 'ft/lunar'
     # folder = 'ft/benchmark'
     # folder = 'multinasium'
     # plotter(folder=folder, metrics=['step', 'train/loss', 'loss'])
-    plotter(folder=folder)
+    plotter(folder=folder, ylim=(-100, 300), metrics=['step', 'eval/avg_reward'])
     plotter(folder=folder, metrics=['step', 'rollout/reward'])
     plotter(folder=folder, metrics=['step', 'train/theta', 'theta'])
     plotter(folder=folder, metrics=['step', 'train/avg logu', 'avg logu'])
