@@ -1,14 +1,15 @@
 cartpole_hparams0 = {
     'beta': 0.1,
-    'batch_size': 400,
+    'batch_size': 300,
     'buffer_size': 150000,
-    'gradient_steps': 20,
-    'learning_rate': 5.5e-3,
+    'gradient_steps': 1,
+    'learning_rate': 2e-3,
     'target_update_interval': 70,
     'tau': 0.85,
-    'tau_theta': 0.85,
+    'theta_update_interval': 1,
+    'tau_theta': 0.4,
     'hidden_dim': 64,
-    'train_freq': 20,
+    'train_freq': 1,
     'learning_starts': 1000
 }
 
@@ -185,14 +186,30 @@ cheetah_hparams = {
 
 
 cheetah_hparams2 = {
-    'batch_size': 300,
-    'beta': 1,
+    'batch_size': 200,
+    'beta': 10,#0.87,
     'buffer_size': 1_000_000,
     'gradient_steps': 1,
-    'learning_rate': 3e-4,
-    'target_update_interval': 15,
-    'tau': 0.99,
-    'tau_theta': 0.9,
+    'learning_rate': 3.e-4,
+    'actor_learning_rate': 1.e-5,
+    'target_update_interval': 8,
+    'theta_update_interval': 10,
+    'tau': 0.84,
+    'tau_theta': 0.955,
     'train_freq': 1,
-    'hidden_dim': 128,
+    'hidden_dim': 256,
+}
+
+lunar_hparams_logu = {
+    'batch_size': 200,
+    'beta': 6.,
+    'hidden_dim': 256,
+    'learning_rate': 6e-4,
+    'target_update_interval': 1500,
+    'tau': 0.3,
+    'tau_theta': 0.95,
+    'theta_update_interval': 35,
+    'buffer_size': 50_000,
+    'gradient_steps': 4,
+    'train_freq': 12,
 }

@@ -38,10 +38,12 @@ class LogUActor:
                  render=False,
                  log_interval=1000,
                  save_checkpoints=False,
+                 use_wandb=False,
                  ) -> None:
         self.env_id = env_id
         self.env = gym.make(env_id)
-        self.vec_env = gym.make_vec(self.env_id, num_envs=batch_size)
+        self.n_samples = 1
+        # self.vec_env = gym.make_vec(self.env_id, num_envs=self.n_samples)
 
         # make another instance for evaluation purposes only:
         self.eval_env = gym.make(env_id,
@@ -68,6 +70,7 @@ class LogUActor:
         self.max_grad_norm = max_grad_norm
         self.num_nets = num_nets
         self.prior = None
+        self.use_wandb = use_wandb
         self.actor_learning_rate = actor_learning_rate if \
             actor_learning_rate is not None else learning_rate
         
@@ -126,28 +129,32 @@ class LogUActor:
             replay = self.replay_buffer.sample(self.batch_size)
             states, actions, next_states, dones, rewards = replay
             actor_actions, curr_log_prob, means = self.actor.sample(states)
+            curr_logu = torch.stack([online_logu(states, actions)
+                                   for online_logu in self.online_logus], dim=-1).squeeze(1)
             with torch.no_grad():
-                # use same number of samples as the batch size for convenience:
-                prior_actions = self.vec_env.action_space.sample()
-                # repeat the ref_next_state n_samples times:
-                ref_next_state = torch.stack([torch.Tensor(self.ref_next_state) for _ in range(self.batch_size)], dim=1).T
-                # Calculate ref_logu for all prior_actions at once
-                # ref_logu = [logu(ref_next_state, prior_actions) for logu in self.online_logus]
-                # ref_logu = torch.stack(ref_logu, dim=-1).mean(dim=0)
+                # # use same number of samples as the batch size for convenience:
+                # prior_actions = np.array([self.env.action_space.sample() for _ in range(self.batch_size)])
+                # prior_actions = torch.Tensor(prior_actions).to(self.device)
+                # # repeat the ref_next_state n_samples times:
+                # ref_next_state = torch.stack([torch.Tensor(self.ref_next_state) for _ in range(self.batch_size)], dim=1).T
+                # # Calculate ref_logu for all prior_actions at once
+                # # ref_logu = [logu(ref_next_state, prior_actions) for logu in self.online_logus]
+                # # ref_logu = torch.stack(ref_logu, dim=-1).mean(dim=0)
 
 
-                ref_next_state = torch.stack([torch.Tensor(self.ref_next_state) for _ in range(self.batch_size)], dim=1).T
-                ref_logu = torch.stack([logu(ref_next_state, prior_actions) for logu in self.online_logus], dim=-1).mean(dim=0)
+                # ref_next_state = torch.stack([torch.Tensor(self.ref_next_state) for _ in range(self.batch_size)], dim=1).T
+                # ref_logu = torch.stack([logu(ref_next_state, prior_actions) for logu in self.online_logus], dim=-1).mean(dim=0)
 
 
-                # Calculate ref_chi for all samples at once
-                ref_chi = torch.exp(ref_logu)
+                # # Calculate ref_chi for all samples at once
+                # ref_chi = torch.exp(ref_logu)
 
-                new_theta = self.ref_reward - torch.log(ref_chi)
-                new_thetas[grad_step, :] = new_theta
+                # new_theta = self.ref_reward - torch.log(ref_chi)
+                # new_thetas[grad_step, :] = new_theta
 
                 
-                rand_actions = self.vec_env.action_space.sample()
+                rand_actions = np.array([self.env.action_space.sample() for _ in range(self.batch_size)])
+                rand_actions = torch.Tensor(rand_actions).to(self.device)               
                 
                 target_next_logu = torch.stack([target_logu(next_states, rand_actions)
                                                 for target_logu in self.target_logus], dim=-1)
@@ -156,10 +163,13 @@ class LogUActor:
 
                 expected_curr_logu = self.beta * \
                     (rewards + self.theta) + (1 - dones) * next_logu
+                
+                
+                new_theta = torch.mean((self.beta * rewards + (1-dones)*next_logu - curr_logu) / -self.beta)
+                new_theta = torch.min(new_theta)
                 expected_curr_logu = expected_curr_logu.squeeze(1)
 
-            curr_logu = torch.stack([online_logu(states, actions)
-                                   for online_logu in self.online_logus], dim=-1).squeeze(1)
+            
 
             self.logger.record("train/theta", self.theta.item())
             self.logger.record("train/avg logu", curr_logu.mean().item())
@@ -172,6 +182,12 @@ class LogUActor:
 
             actor_loss = 0.5 * \
                 F.smooth_l1_loss(curr_log_prob, actor_curr_logu.min(dim=-1)[0])
+            # PPO clips the prioritzed sampling
+            # ratio = torch.exp(curr_logu - actor_curr_logu.min(dim=-1)[0] )
+            # Clip the ratio:
+            # eps=0.2
+            # ratio = torch.clamp(ratio, 1-eps, 1+eps)
+            # actor_loss = torch.log(ratio)
                 
             # actor_loss = (curr_log_prob - actor_curr_logu.min(dim=-1)[0]).mean()
 
@@ -183,10 +199,12 @@ class LogUActor:
             self._n_updates += self.gradient_steps
 
             # if self._n_updates % 100 == 0:
-            actor_loss.backward()  
-
+            actor_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.max_grad_norm)
+            
             # Clip gradient norm
             loss.backward()
+            self.online_logus.clip_grad_norm(self.max_grad_norm)
 
             # Log the average gradient:
             for idx, logu in enumerate(self.online_logus.nets):
@@ -198,13 +216,12 @@ class LogUActor:
                 [p.grad.detach().abs().max() for p in self.actor.parameters()]
             ))
             self.logger.record("grad/actor_norm", actor_norm.item())
-            self.online_logus.clip_grad_norm(self.max_grad_norm)
             self.optimizers.step()
             # record both thetas:
-            for idx, theta in enumerate(new_theta.squeeze(0)):
-                self.logger.record(f"train/theta_{idx}", theta.item())
+            # for idx, theta in enumerate(new_theta.squeeze(0)):
+            self.logger.record(f"train/theta_", new_theta.item())
         # TODO: Take the mean, then aggregate:
-        new_theta = torch.min(new_thetas.mean(dim=0), dim=0)[0]
+        new_theta = new_theta #torch.min(new_thetas.mean(dim=0), dim=0)[0]
 
         if self._n_updates % self.theta_update_interval == 0:
             self.theta = self.tau_theta * self.theta + \
@@ -224,36 +241,39 @@ class LogUActor:
                 # self.actor.set_training_mode(False)
                 if self.env_steps < self.learning_starts:
                     # take a random action:
-                    action = self.env.action_space.sample()
+                    noisy_action = self.env.action_space.sample()
                 else:
                     with torch.no_grad():
-                        action, _, _ = self.actor.sample(state)
+                        noisy_action, _, _ = self.actor.sample(state)
                         # add some noise
                         # action += np.random.normal(0, 0.05, size=action.shape)#.clamp(-0.2, 0.2)
-                        action = action.cpu().numpy()
+                        noisy_action = noisy_action.cpu().numpy()
                 next_state, reward, terminated, truncated, infos = self.env.step(
-                    action)
+                    noisy_action)
                 done = terminated or truncated
                 self.rollout_reward += reward
                 if self.env_steps == 0:
                     self.ref_state = state
-                    self.ref_action = action
+                    self.ref_action = noisy_action
                     self.ref_reward = reward
                     self.ref_next_state = next_state
 
                 if (self.train_freq == -1 and done) or (self.train_freq != -1 and self.env_steps % self.train_freq == 0):
-                    if self.replay_buffer.size() > self.learning_starts:
+                    if self.replay_buffer.size() > self.batch_size:
                         self.train()
 
                 if self.env_steps % self.target_update_interval == 0:
                     # Do a Polyak update of parameters:
                     self.target_logus.polyak(self.online_logus, self.tau)
+                    
+                # if self.env_steps % 10_000 == 0:
+                #     self.beta = min(1e3, self.beta * 1.4)
 
                 self.env_steps += 1
 
                 episode_reward += reward
                 self.replay_buffer.add(
-                    state, next_state, action, reward, terminated, infos)
+                    state, next_state, noisy_action, reward, terminated, infos)
                 state = next_state
                 
                 self._log_stats()
@@ -291,6 +311,7 @@ class LogUActor:
                 self.logger.record("time/env. steps", self.env_steps)
                 self.logger.record("eval/avg_reward", avg_eval_rwd)
                 self.logger.record("eval/auc", self.eval_auc)
+                self.logger.record("rollout/beta", self.beta)
                 self.logger.record("time/num. episodes", self.num_episodes)
                 self.logger.record("time/n_updates", self._n_updates)
                 self.logger.record("time/fps", fps)
@@ -304,7 +325,8 @@ class LogUActor:
                 #                        param.data.mean().item())
 
                 self.logger.dump(step=self.env_steps)
-                wandb.log({'env step': self.env_steps, 'avg_eval_rwd': avg_eval_rwd})
+                if self.use_wandb:
+                    wandb.log({'env step': self.env_steps, 'avg_eval_rwd': avg_eval_rwd})
                 self.t0 = time.thread_time_ns()
 
             self.logger.record("rollout/reward", self.rollout_reward)
@@ -336,17 +358,17 @@ class LogUActor:
         raise NotImplementedError
 
 def main():
-    # env_id = 'LunarLander-v2'
+    env_id = 'LunarLanderContinuous-v2'
     # env_id = 'Pendulum-v1'
     # env_id = 'Hopper-v4'
-    env_id = 'HalfCheetah-v4'
+    # env_id = 'HalfCheetah-v4'
     # env_id = 'Ant-v4'
     # env_id = 'Simple-v0'
     from darer.hparams import cheetah_hparams2 as config
-    agent = LogUActor(env_id, **config, device='cuda',
-                      num_nets=2, learning_starts=10000, theta_update_interval=500,
-                      actor_learning_rate=3e-4, log_dir='pend',
-                      render=0, max_grad_norm=10, log_interval=500)
+    agent = LogUActor(env_id, **config, device='cpu',
+                      num_nets=2, learning_starts=10_000,
+                      log_dir='pend',
+                      render=1, max_grad_norm=10, log_interval=1500)
     agent.learn(total_timesteps=5_000_000)
 
 
