@@ -6,7 +6,8 @@ import time
 from stable_baselines3.common.buffers import ReplayBuffer
 import wandb
 from Models import LogUNet, OnlineNets, Optimizers, TargetNets
-from utils import logger_at_folder
+from utils import env_id_to_envs, logger_at_folder
+from stable_baselines3.common.preprocessing import preprocess_obs
 # raise warning level for debugger:
 import warnings
 # warnings.filterwarnings("error")
@@ -36,10 +37,8 @@ class LogULearner:
                  save_checkpoints=False,
                  use_wandb=False,
                  ) -> None:
-        self.env = gym.make(env_id)
-        # make another instance for evaluation purposes only:
-        self.eval_env = gym.make(
-            env_id, render_mode='human' if render else None)
+        
+        self.env, self.eval_env = env_id_to_envs(env_id, render)
         self.beta = beta
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -81,6 +80,9 @@ class LogULearner:
         self._n_updates = 0
         self.env_steps = 0
         self._initialize_networks()
+        # Log the hparams:
+        self._log_stats()
+
 
     def _initialize_networks(self):
         self.online_logus = OnlineNets(list_of_nets=[LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
@@ -102,7 +104,8 @@ class LogULearner:
         for grad_step in range(self.gradient_steps):
             replay = self.replay_buffer.sample(self.batch_size)
             states, actions, next_states, dones, rewards = replay
-
+            curr_logu = torch.cat([online_logu(states).squeeze().gather(1, actions.long())
+                                   for online_logu in self.online_logus], dim=1)
             with torch.no_grad():
                 ref_logu = [logu(self.ref_next_state)
                             for logu in self.online_logus]
@@ -116,14 +119,16 @@ class LogULearner:
                                                 for target_logu in self.target_logus], dim=1)
 
                 next_logu, _ = torch.min(target_next_logu, dim=1)
-                next_logu = next_logu.unsqueeze(1)
+                if isinstance(self.env.observation_space, gym.spaces.Discrete):
+                    pass
+                else:
+                    next_logu = next_logu.unsqueeze(1)
 
                 expected_curr_logu = self.beta * \
                     (rewards + self.theta) + (1 - dones) * next_logu
                 expected_curr_logu = expected_curr_logu.squeeze(1)
 
-            curr_logu = torch.cat([online_logu(states).squeeze().gather(1, actions.long())
-                                   for online_logu in self.online_logus], dim=1)
+            
             self.logger.record("train/theta", self.theta.item())
             self.logger.record("train/avg logu", curr_logu.mean().item())
 
@@ -199,12 +204,11 @@ class LogULearner:
                 if self.env_steps % self.target_update_interval == 0:
                     # Do a Polyak update of parameters:
                     self.target_logus.polyak(self.online_logus, self.tau)
+                    # self.beta = min(1/ ( 1 / self.beta - 2e-3), 15)
 
                 self.env_steps += 1
 
                 episode_reward += reward
-                # TODO: Determine whether this should be done or terminated (or truncated?)
-                # Looks like done (both) works best... possibly because we need continuing env?
                 self.replay_buffer.add(
                     state, next_state, action, reward, terminated, infos)
                 state = next_state
@@ -248,6 +252,7 @@ class LogULearner:
             self.logger.record("eval/auc", self.eval_auc)
             self.logger.record("time/num. episodes", self.num_episodes)
             self.logger.record("time/fps", fps)
+            self.logger.record("rollout/beta", self.beta)
             if self.use_wandb:
                 wandb.log({'env_steps': self.env_steps,'eval/avg_reward': avg_eval_rwd})
             self.logger.dump(step=self.env_steps)
@@ -281,17 +286,17 @@ def main():
     # env_id = 'Taxi-v3'
     # env_id = 'CliffWalking-v0'
     # env_id = 'Acrobot-v1'
-    # env_id = 'LunarLander-v2'
+    env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
     # env_id = 'Drug-v0'
-    from hparams import acrobot_logu as config
-    agent = LogULearner(env_id, **config, device='cpu',
-                        log_dir='multinasium', num_nets=1, render=True)
+    from hparams import lunar_hparams_logu as config
+    agent = LogULearner(env_id, **config, device='cuda',
+                        log_dir='pend', num_nets=2, render=False)
     # agent = CustomDQN(env_id, device='cuda', **config)
 
-    agent.learn(total_timesteps=200_000)
+    agent.learn(total_timesteps=600_000)
 
 
 if __name__ == '__main__':
