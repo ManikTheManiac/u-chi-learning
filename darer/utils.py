@@ -1,4 +1,5 @@
 import os
+import gymnasium as gym
 from stable_baselines3.common.logger import configure
 import time
 
@@ -28,3 +29,19 @@ def logger_at_folder(log_dir=None, algo_name=None):
         logger = configure(format_strings=["stdout"])
 
     return logger
+
+def env_id_to_envs(env_id, render):
+    if isinstance(env_id, str):
+        env = gym.make(env_id)
+        # make another instance for evaluation purposes only:
+        eval_env = gym.make(env_id, render_mode='human' if render else None)
+    elif isinstance(env_id, gym.Env):
+        env = env_id
+        # Make a new copy for the eval env:
+        import copy
+        eval_env = copy.deepcopy(env_id)
+    else:
+        raise ValueError(
+            "env_id must be a string or gym.Env instance.")
+
+    return env, eval_env
