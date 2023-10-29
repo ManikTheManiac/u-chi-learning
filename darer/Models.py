@@ -17,14 +17,15 @@ class LogUNet(nn.Module):
         elif isinstance(env.observation_space, spaces.Box):
             self.nS = env.observation_space.shape[0]       
         self.nA = env.action_space.n
-        self.fc1 = nn.Linear(self.nS, hidden_dim, device=self.device)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim, device=self.device)
-        self.fc3 = nn.Linear(hidden_dim, self.nA, device=self.device)
+        self.fc1 = nn.Linear(self.nS, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, self.nA)
         self.relu = nn.ReLU()
+        self.to(device)
      
     def forward(self, x):
         if not isinstance(x, torch.Tensor):
-            x = torch.tensor(x, device=self.device, dtype=torch.float32).detach()  # Convert to PyTorch tensor
+            x = torch.tensor(x, device=self.device)#, dtype=torch.float32).detach()  # Convert to PyTorch tensor
 
         x = preprocess_obs(x, self.env.observation_space)
 
@@ -35,13 +36,6 @@ class LogUNet(nn.Module):
         x = self.fc3(x)
 
         return x
-
-    def get_chi(self, logu_a, prior=None):
-        if prior is None:
-            prior = 1 / self.nA
-
-        chi = torch.sum(prior * torch.exp(logu_a))
-        return chi
         
     def choose_action(self, state, greedy=False, prior=None):
         if prior is None:
@@ -94,11 +88,6 @@ class UNet(nn.Module):
 
         return torch.abs(x)
         # return self.relu(x+4) + 1e-6
-
-    def get_chi(self, u_a):
-        prior_policy = 1 / self.nA
-        chi = torch.sum(prior_policy * u_a)
-        return chi
         
     def choose_action(self, state, greedy=False):
         with torch.no_grad():

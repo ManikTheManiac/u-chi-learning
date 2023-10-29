@@ -233,8 +233,7 @@ class LogULearner:
                                self.target_update_interval)
             self.logger.record("hparams/theta_update_interval",
                                self.theta_update_interval)
-            self.logger.record("hparams/actor_learning_rate",
-                               self.actor_learning_rate)
+
 
         elif self.env_steps % self.log_interval == 0:
             # end timer:
@@ -258,7 +257,7 @@ class LogULearner:
             self.logger.dump(step=self.env_steps)
             self.t0 = time.thread_time_ns()
 
-        self.logger.record("rollout/reward", self.rollout_reward)
+            self.logger.record("rollout/reward", self.rollout_reward)
 
     def evaluate(self, n_episodes=1):
         # run the current policy and return the average reward
@@ -296,7 +295,7 @@ def main():
                         log_dir='pend', num_nets=2, render=False)
     # agent = CustomDQN(env_id, device='cuda', **config)
 
-    agent.learn(total_timesteps=600_000)
+    agent.learn(total_timesteps=100_000)
 
 
 if __name__ == '__main__':
