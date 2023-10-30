@@ -83,6 +83,7 @@ class LogULearner:
         self._n_updates = 0
         self.env_steps = 0
         self._initialize_networks()
+        self.loss_fn = F.huber_loss
 
 
     def _initialize_networks(self):
@@ -131,11 +132,10 @@ class LogULearner:
             self.logger.record("train/theta", self.theta.item())
             self.logger.record("train/avg logu", curr_logu.mean().item())
 
-            # Huber loss:
-            loss = 0.5*sum(F.smooth_l1_loss(logu, expected_curr_logu)
+            # logu ("critic") loss:
+            loss = 0.5*sum(self.loss_fn(logu, expected_curr_logu)
                            for logu in curr_logu.T)
-            # MSE loss:
-            # loss = F.mse_loss(curr_logu, expected_curr_logu)
+
             self.logger.record("train/loss", loss.item())
             self.optimizers.zero_grad()
             # Increase update counter
@@ -145,14 +145,13 @@ class LogULearner:
             loss.backward()
             self.online_logus.clip_grad_norm(self.max_grad_norm)
 
-            # Log the average gradient:
-            # TODO: put this in a parallel process somehow or use dot prods?
+            # Log the max gradient:
             # total_norm = torch.max(torch.stack(
-            #             [p.grad.detach().abs().max() for p in self.online_logu.parameters()]
+            #             [p.grad.detach().abs().max() for p in self.online_logus.parameters()]
             #             ))
             # self.logger.record("max_grad", total_norm.item())
             self.optimizers.step()
-        # new_thetas = torch.clamp(new_thetas, 0, -1)
+        # new_thetas = torch.clamp(new_thetas, 1, -1)
         # Log both theta values:
         for idx, new_theta in enumerate(new_thetas.T):
             self.logger.record(f"train/theta_{idx}", new_theta.mean().item())
@@ -161,8 +160,7 @@ class LogULearner:
         # Can't use env_steps b/c we are inside the learn function which is called only
         # every train_freq steps:
         if self._n_updates % self.theta_update_interval == 0:
-            self.theta = self.tau_theta*self.theta + \
-                (1 - self.tau_theta) * new_theta
+            self.theta = self.tau_theta*self.theta + (1 - self.tau_theta) * new_theta
 
     def learn(self, total_timesteps):
         # Start a timer to log fps:
@@ -176,6 +174,9 @@ class LogULearner:
             done = False
             # Random choice:
             action = self.online_logus.choose_action(state)
+            # action = self.online_logus.greedy_action(state)
+
+            # action = self.env.action_space.sample()
 
             self.num_episodes += 1
             self.rollout_reward = 0
@@ -185,6 +186,7 @@ class LogULearner:
                     action = self.env.action_space.sample()
                 else:
                     action = self.online_logus.choose_action(state)
+                    # action = self.online_logus.greedy_action(state)
 
                 next_state, reward, terminated, truncated, infos = self.env.step(
                     action)
@@ -203,18 +205,14 @@ class LogULearner:
                 if self.env_steps % self.target_update_interval == 0:
                     # Do a Polyak update of parameters:
                     self.target_logus.polyak(self.online_logus, self.tau)
-                    # self.beta = min(1/ ( 1 / self.beta - 2e-3), 15)
+
+                #TODO: implement beta schedule
 
                 self.env_steps += 1
 
                 episode_reward += reward
-                # action = torch.Tensor([action]).to(self.device)
-                action = np.array([action])
-                state = np.array([state])
-                next_state = np.array([next_state])
-                # print(infos)
-                self.replay_buffer.add(
-                    state, next_state, action, reward, terminated, [infos])
+
+                self.replay_buffer.add(state, next_state, action, reward, terminated, [infos])
                 state = next_state
 
                 self._log_stats()
@@ -245,7 +243,7 @@ class LogULearner:
             self.t0 = time.thread_time_ns()
 
 
-    def evaluate(self, n_episodes=3):
+    def evaluate(self, n_episodes=1):
         # run the current policy and return the average reward
         avg_reward = 0.
         for ep in range(n_episodes):
@@ -254,10 +252,10 @@ class LogULearner:
             agreed = 0
             n_steps = 0
             while not done:
-                action, agree = self.online_logus.greedy_action(state)
-                agreed += agree
-                n_steps += 1
+                action = self.online_logus.greedy_action(state)
                 # action = self.online_logus.choose_action(state)
+                # agreed += agree
+                n_steps += 1
 
                 next_state, reward, terminated, truncated, info = self.eval_env.step(
                     action)
@@ -265,7 +263,6 @@ class LogULearner:
                 state = next_state
                 done = terminated or truncated
             print(f"agreed: {agreed/n_steps}")
-            # self.eval_env.close()
 
         avg_reward /= n_episodes
         return avg_reward
@@ -276,15 +273,14 @@ def main():
     # env_id = 'Taxi-v3'
     # env_id = 'CliffWalking-v0'
     # env_id = 'Acrobot-v1'
-    # env_id = 'LunarLander-v2'
+    env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
-    env_id = 'MountainCar-v0'
+    # env_id = 'MountainCar-v0'
     # env_id = 'Drug-v0'
-    from hparams import mcar_hparams as config
-    agent = LogULearner(env_id, **config, device='cpu', log_interval=1000,
-                        log_dir='pend', num_nets=2, render=1)
-    # agent = CustomDQN(env_id, device='cuda', **config)
+    from hparams import lunar_hparams_logu as config
+    agent = LogULearner(env_id, **config, device='cuda', log_interval=1000,
+                        log_dir='pend', num_nets=2, render=0)
 
     agent.learn(total_timesteps=1_000_000)
 
