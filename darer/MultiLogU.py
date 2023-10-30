@@ -7,9 +7,13 @@ from stable_baselines3.common.buffers import ReplayBuffer
 import wandb
 from Models import LogUNet, OnlineNets, Optimizers, TargetNets
 from utils import env_id_to_envs, logger_at_folder
-
+HPARAM_ATTRS = {'beta', 'learning_rate', 'batch_size', 'buffer_size', 
+                'target_update_interval', 'tau', 'theta_update_interval', 
+                'hidden_dim', 'num_nets', 'tau_theta', 'gradient_steps',
+                'train_freq', 'max_grad_norm', 'learning_starts'}
 
 class LogULearner:
+
     def __init__(self,
                  env_id,
                  beta,
@@ -71,12 +75,14 @@ class LogULearner:
 
         # Set up the logger:
         self.logger = logger_at_folder(log_dir, algo_name=f'acro1')
+        # Log the hparams:
+        for key in HPARAM_ATTRS:
+            self.logger.record(f"hparams/{key}", self.__dict__[key])
+        self.logger.dump()
 
         self._n_updates = 0
         self.env_steps = 0
         self._initialize_networks()
-        # Log the hparams:
-        self._log_stats()
 
 
     def _initialize_networks(self):
@@ -216,26 +222,7 @@ class LogULearner:
                 self._log_stats()
 
     def _log_stats(self):
-        if self.env_steps == 0:
-            # Log the hparams:
-            self.logger.record("hparams/beta", self.beta)
-            self.logger.record("hparams/learning_rate", self.learning_rate)
-            self.logger.record("hparams/batch_size", self.batch_size)
-            self.logger.record("hparams/buffer_size", self.buffer_size)
-            self.logger.record("hparams/tau", self.tau)
-            self.logger.record("hparams/tau_theta", self.tau_theta)
-            self.logger.record("hparams/gradient_steps", self.gradient_steps)
-            self.logger.record("hparams/hidden_dim", self.hidden_dim)
-            self.logger.record("hparams/train_freq", self.train_freq)
-            self.logger.record("hparams/max_grad_norm", self.max_grad_norm)
-            self.logger.record("hparams/num_nets", self.num_nets)
-            self.logger.record("hparams/target_update_interval",
-                               self.target_update_interval)
-            self.logger.record("hparams/theta_update_interval",
-                               self.theta_update_interval)
-
-
-        elif self.env_steps % self.log_interval == 0:
+        if self.env_steps % self.log_interval == 0:
             # end timer:
             t_final = time.thread_time_ns()
             # fps averaged over log_interval steps:
