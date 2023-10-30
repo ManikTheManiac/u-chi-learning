@@ -49,10 +49,11 @@ class LogUNet(nn.Module):
                 return a.item()
 
             # First subtract a baseline:
-            logu = logu - (torch.max(logu) + torch.min(logu))/2
-            dist = torch.exp(logu) * prior
-            # dist = dist / torch.sum(dist)
-            c = Categorical(dist)
+            # logu = logu - (torch.max(logu) + torch.min(logu))/2
+            # dist = torch.exp(logu) * prior
+            # # dist = dist / torch.sum(dist)
+            # c = Categorical(dist)
+            c = Categorical(logits=logu*prior)
             a = c.sample()
 
         return a.item()
@@ -128,7 +129,6 @@ class TargetNets():
         self.nets = list_of_nets
     def __len__(self):
         return len(self.nets)
-
     def __iter__(self):
         return iter(self.nets)
 
@@ -145,8 +145,9 @@ class TargetNets():
         if len(list_of_state_dicts) != len(self):
             raise ValueError("Number of state dictionaries does not match the number of target networks.")
         
-        for new_state, target_net in zip(list_of_state_dicts, self):
-            target_net.load_state_dict(new_state)
+        for online_net_dict, target_net in zip(list_of_state_dicts, self):
+            
+            target_net.load_state_dict(online_net_dict)
 
     def polyak(self, online_nets, tau):
         """
@@ -163,9 +164,14 @@ class TargetNets():
             raise ValueError("Number of online networks does not match the number of target networks.")
 
         with torch.no_grad():
-            for online_net, target_net in zip(online_nets, self.nets):
-                for online_param, target_param in zip(online_net.parameters(), target_net.parameters()):
-                    target_param.data.mul_(tau).add_(online_param.data, alpha=1.0 - tau)
+            # zip does not raise an exception if length of parameters does not match.
+            for new_params, target_params in zip(online_nets.parameters(), self.parameters()):
+                for new_param, target_param in zip_strict(new_params, target_params):
+                    # target_param.data.mul_(tau)
+                    # new_param.data.mul_(1 - tau)
+                    # target_param.data.add_(new_param.data)
+                    target_param.data.mul_(tau).add_(new_param.data, alpha=1.0-tau)
+                    # torch.add(target_param.data, new_param.data, out=target_param.data)
 
     def parameters(self):
         """
@@ -177,104 +183,47 @@ class TargetNets():
         return [net.parameters() for net in self.nets]
 
 
-import torch
-import torch.distributions as dist
-
-class OnlineNets:
+class OnlineNets():
     """
     A utility class for managing online networks in reinforcement learning.
 
     Args:
         list_of_nets (list): A list of online networks.
     """
-
     def __init__(self, list_of_nets):
         self.nets = list_of_nets
 
     def __len__(self):
         return len(self.nets)
-
+    
     def __iter__(self):
         return iter(self.nets)
 
     def greedy_action(self, state):
-        """
-        Select a greedy action based on the online networks.
-
-        Args:
-            state (torch.Tensor): The input state.
-
-        Returns:
-            int: The index of the greedy action.
-        """
         with torch.no_grad():
-            logu_stacked = torch.stack([net(state) for net in self])
-            logu = logu_stacked.squeeze(1)
-            logu = torch.min(logu, dim=0)[0]
-            greedy_action = logu.argmax()
-            # check if the nets agree:
-            all_greedys = logu_stacked.argmax(dim=-1)
-            agreed = torch.all(all_greedys == greedy_action)
-            # print(agreed)
-        return greedy_action.item(), agreed
+            logu = torch.stack([net(state) for net in self.nets])
+            logu = logu.squeeze(1)
+            # logu = torch.min(logu, dim=0)[0]
+            # greedy_action = logu.argmax()
+            greedy_actions = [net(state).argmax().cpu() for net in self.nets]
+            greedy_action = np.random.choice(greedy_actions)
+        return np.array(greedy_action.item())
+        # return np.array(greedy_action.item())
 
-    def choose_action(self, state, prior=None):
-        # Validate the input state
-        # assert isinstance(state, torch.Tensor), "Input state must be a PyTorch tensor"
-        # assert state.shape == (batch_size, state_dim), "Invalid state shape"
-
-        # Get actions from each network
-        logus = torch.stack([net.forward(state) for net in self])
-        logus = logus.squeeze(1)
-        logu = torch.min(logus, dim=0)[0] # pessimistic values for approximation of true value
-        
-        # print(actions)
-        if prior is None:
-            # If no prior is provided, sample uniformly
-            # action = np.random.choice(actions)
-            
-            # First subtract a baseline:
-            logu = logu - (torch.max(logu) + torch.min(logu))/2
-            # print(u)
-            u = torch.exp(logu)
-            dist = u * 1 / 2
-            dist = dist / torch.sum(dist)
-            # print(dist)
-            c = Categorical(dist)
-            action = c.sample()
-
-            # action = actions[0]
-        # else:
-        #     # Ensure that prior is a list of weights (e.g., [0.2, 0.3, 0.5])
-        #     assert isinstance(prior, list), "Prior must be a list of weights"
-        #     assert len(prior) == len(actions), "Prior length must match the number of networks"
-
-        #     # Normalize the prior weights to create a probability distribution
-        #     prior_prob = [weight / sum(prior) for weight in prior]
-
-        #     # Sample an action based on the prior distribution
-        #     action = np.random.choice(actions, p=prior_prob)
-
-        return action.item()
+    def choose_action(self, state):
+        # Get a sample from each net, then sample uniformly over them:
+        actions = [net.choose_action(state) for net in self.nets]
+        action = np.random.choice(actions)
+        # perhaps re-weight this based on pessimism?
+        return action
 
     def parameters(self):
-        """
-        Get the parameters of all online networks.
-
-        Returns:
-            list: A list of network parameters for each online network.
-        """
         return [net.parameters() for net in self]
 
     def clip_grad_norm(self, max_grad_norm):
-        """
-        Clip gradients for all online networks.
-
-        Args:
-            max_grad_norm (float): Maximum gradient norm for clipping.
-        """
         for net in self:
             torch.nn.utils.clip_grad_norm_(net.parameters(), max_grad_norm)
+
 
 class LogUsa(nn.Module):
     def __init__(self, env, hidden_dim=256, device='cuda'):
