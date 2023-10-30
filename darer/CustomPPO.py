@@ -19,8 +19,8 @@ class CustomPPO(PPO):
         self.tensorboard_log = log_dir
 
     def train(self):
-        if self._n_updates % 10 == 0:
-            self.eval_rwd = self.evaluate_agent(3)
+        if self.num_timesteps % self.eval_interval == 0:
+            self.eval_rwd = self.evaluate_agent(1)
             self.eval_auc += self.eval_rwd
             self.logger.record("eval/auc", self.eval_auc)
             self.logger.record("eval/avg_reward", self.eval_rwd)

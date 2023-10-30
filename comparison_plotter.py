@@ -34,7 +34,11 @@ def plotter(folder, metrics=['step', 'eval/avg_reward'], ylim=None):
 
         # Convert the tensorboard file to a pandas dataframe:
         log_file = f'{folder}/{subfolder}/{file}'
+<<<<<<< HEAD
         print("Processing", subfolder, "...")
+=======
+        print("Processing", subfolder)
+>>>>>>> main
         reader = SummaryReader(log_file)
         df = reader.scalars
         # filter the desired metrics:
@@ -54,7 +58,7 @@ def plotter(folder, metrics=['step', 'eval/avg_reward'], ylim=None):
             print("Error processing", log_file)
             print_tb(e.__traceback__)
             continue
-    # Now, plot the algo_data:
+
     sns.lineplot(data=algo_data, x='step', y='value', hue='algo')
     # Append the number of runs to the legend for each algo:
     for algo in algos:

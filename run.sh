@@ -9,7 +9,7 @@
 # additional options
 #SBATCH --error=outfiles/%j.err
 #SBATCH --output=outfiles/%j.out
-#SBATCH --partition=AMD6276
+##SBATCH --partition=AMD6276
 # use the gpu:
 ##SBATCH --gres=gpu:1
 ##SBATCH --partition=DGXA100
