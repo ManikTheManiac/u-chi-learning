@@ -30,6 +30,7 @@ class LogULearner:
                  train_freq=-1,
                  max_grad_norm=10,
                  learning_starts=1000,
+                 loss_fn=None,
                  device='cpu',
                  render=False,
                  log_dir=None,
@@ -83,7 +84,7 @@ class LogULearner:
         self._n_updates = 0
         self.env_steps = 0
         self._initialize_networks()
-        self.loss_fn = F.huber_loss
+        self.loss_fn = F.huber_loss if loss_fn is None else loss_fn
 
 
     def _initialize_networks(self):
