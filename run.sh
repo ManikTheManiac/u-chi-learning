@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=u-chi
 #SBATCH --time=23:00:00
-#SBATCH --mem-per-cpu=8gb
-#SBATCH --cpus-per-task=16
+#SBATCH --mem-per-cpu=3gb
+#SBATCH --cpus-per-task=2
 
 # Set filenames for stdout and stderr.  %j can be used for the jobid.
 # see "filename patterns" section of the sbatch man page for
@@ -14,8 +14,7 @@
 ##SBATCH --gres=gpu:1
 ##SBATCH --partition=DGXA100
 ##SBATCH --export=NONE
-
-##SBATCH --array=1-5
+#SBATCH --array=1-50
 echo "using scavenger"
 
 # Prepare conda:
