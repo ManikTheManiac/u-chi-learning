@@ -10,7 +10,7 @@ env_id = 'LunarLander-v2'
 # env_id = 'Pendulum-v1'
 
 
-def runner(config=None, run=None):
+def runner(config=None, run=None, device='cpu'):
     # Convert the necessary kwargs to ints:
     for int_kwarg in ['batch_size', 'target_update_interval', 'theta_update_interval']:
         config[int_kwarg] = int(config[int_kwarg])
@@ -26,7 +26,7 @@ def runner(config=None, run=None):
 
     for _ in range(runs_per_hparam):
         model = LogULearner(env_id, **config, log_interval=1500, use_wandb=True,
-                            device='cuda', render=0)
+                            device=device, render=0)
         model.learn(total_timesteps=50_000)
         auc += model.eval_auc
     auc /= runs_per_hparam
@@ -37,7 +37,7 @@ def wandb_agent():
     with wandb.init(sync_tensorboard=False, monitor_gym=False, dir='logs') as run:
         cfg = run.config
         dict_cfg = cfg.as_dict()
-        runner(dict_cfg, run=run)
+        runner(dict_cfg, run=run, device=args.device)
 
 
 if __name__ == "__main__":
