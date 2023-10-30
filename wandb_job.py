@@ -51,7 +51,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--count", type=int, default=100)
 
     args = parser.parse_args()
-    full_sweep_id = f"{args.entity}/{args.project}/{args.sweep_id}"
+    full_sweep_id = f"{entity}/{project}/{sweep_id}"
 
     # TODO: Before calling the agent on this full_sweep_id, make sure it exists (i.e. the project and sweep):
     # test_sweep_existence(full_sweep_id)
