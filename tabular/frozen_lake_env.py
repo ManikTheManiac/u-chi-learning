@@ -18,6 +18,7 @@ class ModifiedFrozenLake(DiscreteEnv):
             max_reward=0., min_reward=-1.5, step_penalization=1.,
             render_mode=None):
 
+        self.render_mode = render_mode
         goal_attractor = float(goal_attractor)
 
         if desc is None and map_name is None:
@@ -40,6 +41,12 @@ class ModifiedFrozenLake(DiscreteEnv):
             a_right = 1
             a_up = None
             a_stay = 2
+        elif n_action in [4, 5]:
+            a_left = 0
+            a_down = 1
+            a_right = 2
+            a_up = 3
+            a_stay = 4
         elif n_action in [8, 9]:
             a_left = 0
             a_down = 1
@@ -50,12 +57,7 @@ class ModifiedFrozenLake(DiscreteEnv):
             a_rightup = 6
             a_upleft = 7
             a_stay = 8
-        elif n_action in [4, 5]:
-            a_left = 0
-            a_down = 1
-            a_right = 2
-            a_up = 3
-            a_stay = 4
+
         else:
             raise NotImplementedError(f'n_action:{n_action}')
 
@@ -84,6 +86,8 @@ class ModifiedFrozenLake(DiscreteEnv):
                 col = min(col + 1, ncol - 1)
             elif action == a_up:
                 row = max(row - 1, 0)
+            elif action == a_stay:
+                pass
             elif action == a_leftdown:
                 col = max(col - 1, 0)
                 row = min(row + 1, nrow - 1)
@@ -96,8 +100,7 @@ class ModifiedFrozenLake(DiscreteEnv):
             elif action == a_upleft:
                 row = max(row - 1, 0)
                 col = max(col - 1, 0)
-            elif action == a_stay:
-                pass
+        
             else:
                 raise ValueError("Invalid action provided")
             return (row, col)
@@ -197,28 +200,33 @@ class ModifiedFrozenLake(DiscreteEnv):
 
         self.nS = n_state
         self.nA = n_action
-        # super(ModifiedFrozenLake, self).__init__(render_mode=render_mode,
-        #                                          desc=desc,
-        #                                          map_name=map_name,
-        #                                          is_slippery=slippery) #n_state, n_action, transition_dynamics, isd)
+        
         super(ModifiedFrozenLake, self).__init__(n_state, n_action, transition_dynamics, isd)
 
     def step(self, action):
-        transitions = self.P[self.s][action]
+        if isinstance(action, np.ndarray):
+            action = action.item()
+        transitions = self.P[self.s][int(action)]
         i = np.random.choice(len(transitions), p=[t[0] for t in transitions])
-        p, s, r, d = transitions[i]
-        self.s = s
+        prob, state, reward, terminated = transitions[i]
+        self.s = state
         self.lastaction = action
-        s = np.array([self.s])
-
-        return (s, r, d, False, {"prob": p})
+        state = np.array([self.s])
+        if self.render_mode == 'human':
+            self.render()
+        #TODO: update with time limit somehow
+        truncated = False
+        return (state, reward, terminated, truncated, {"prob": prob})
 
     def reset(self):
         super(ModifiedFrozenLake, self).reset()
         return np.array([self.s]) , {}
 
-    def render(self, mode='human'):
-        outfile = StringIO() if mode == 'ansi' else sys.stdout
+    def render(self):
+        if self.render_mode is None:
+            return
+        
+        outfile = StringIO() if self.render_mode == 'ansi' else sys.stdout
 
         row, col = self.s // self.ncol, self.s % self.ncol
         desc = self.desc.tolist()
@@ -231,7 +239,7 @@ class ModifiedFrozenLake(DiscreteEnv):
             outfile.write("\n")
         outfile.write("\n".join(''.join(line) for line in desc)+"\n")
 
-        if mode != 'human':
+        if self.render_mode != 'human':
             with closing(outfile):
                 return outfile.getvalue()
         else:

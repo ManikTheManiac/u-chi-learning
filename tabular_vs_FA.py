@@ -9,9 +9,9 @@ from tabular.utils import get_dynamics_and_rewards, solve_unconstrained
 
 from darer.MultiLogU import LogULearner
 from darer.hparams import *
-config = cartpole_hparams0
+config = cartpole_hparams2
 config.pop('beta')
-map_name = '5x11ridgex2'
+map_name = '4x4'
 def exact_solution(beta, env):
 
     dynamics, rewards = get_dynamics_and_rewards(env.unwrapped)
@@ -29,7 +29,7 @@ def exact_solution(beta, env):
 def FA_solution(beta, env):
     # Use MultiLogU to solve the environment
 
-    agent = LogULearner(env, **config, log_interval=100, num_nets=2, device='cuda', beta=beta)
+    agent = LogULearner(env, **config, log_interval=100, num_nets=2, device='cpu', beta=beta, render=1)
     agent.learn(total_timesteps=70_000)
     # convert agent.theta to float
     theta = agent.theta.item()
@@ -37,7 +37,7 @@ def FA_solution(beta, env):
 
 def main():
     # initialize the environment
-    n_action = 4
+    n_action = 5
     max_steps = 200
     desc = np.array(MAPS[map_name], dtype='c')
     env_src = ModifiedFrozenLake(
@@ -50,8 +50,8 @@ def main():
     env = TimeLimit(env_src, max_episode_steps=max_steps)
 
     # Set the beta values to test
-    betas = np.logspace(-1, 1, 4)
-    betas = [0.1, 1, 10]
+    betas = np.logspace(1, 1, 4)
+    betas = [1, 3, 10]
 
     exact = [exact_solution(beta, env) for beta in betas]
     print(exact)
