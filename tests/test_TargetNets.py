@@ -28,7 +28,7 @@ def test_load_state_dict(target_nets):
         modified_state_dicts.append(modified_state_dict)
 
     # Load the modified state dicts into the TargetNets
-    target_nets.load_state_dict(modified_state_dicts)
+    target_nets.load_state_dicts(modified_state_dicts)
 
     # Check if the nets have been updated
     for net, modified_state_dict in zip(target_nets, modified_state_dicts):
