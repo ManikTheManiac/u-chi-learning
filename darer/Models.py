@@ -235,12 +235,11 @@ class OnlineNets:
             
             # First subtract a baseline:
             logu = logu - (torch.max(logu) + torch.min(logu))/2
-            # print(u)
             u = torch.exp(logu)
-            dist = u * 1 / 2
-            dist = dist / torch.sum(dist)
-            # print(dist)
-            c = Categorical(dist)
+            # dist = u * 1 / 2
+            #TODO: Update for non-uniform priors
+            # dist = dist / torch.sum(dist)
+            c = Categorical(u)
             action = c.sample()
 
             # action = actions[0]

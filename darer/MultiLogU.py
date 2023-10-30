@@ -86,19 +86,17 @@ class LogULearner:
 
 
     def _initialize_networks(self):
-        self.online_logus = OnlineNets(list_of_nets=[LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
+        self.online_logus = OnlineNets([LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
                                                      for _ in range(self.num_nets)])
-        self.target_logus = TargetNets(list_of_nets=[LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
+        self.target_logus = TargetNets([LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
                                                      for _ in range(self.num_nets)])
-        self.target_logus.load_state_dicts(
-            [logu.state_dict() for logu in self.online_logus])
+        self.target_logus.load_state_dicts([logu.state_dict() for logu in self.online_logus])
         # Make (all) LogUs learnable:
         opts = [torch.optim.Adam(logu.parameters(), lr=self.learning_rate)
                 for logu in self.online_logus]
         self.optimizers = Optimizers(opts)
 
     def train(self,):
-        # replay = self.replay_buffer.sample(self.batch_size, env=self._vec_normalize_env)
         # average self.theta over multiple gradient steps
         new_thetas = torch.zeros(
             self.gradient_steps, self.num_nets).to(self.device)
@@ -199,7 +197,7 @@ class LogULearner:
 
                 # TODO: Shorten this: (?)
                 if (self.train_freq == -1 and terminated) or (self.train_freq != -1 and self.env_steps % self.train_freq == 0):
-                    if self.env_steps > self.learning_starts:
+                    if self.env_steps > self.batch_size: #self.learning_starts:
                         self.train()
 
                 if self.env_steps % self.target_update_interval == 0:
@@ -220,6 +218,8 @@ class LogULearner:
                 state = next_state
 
                 self._log_stats()
+            self.logger.record("rollout/reward", self.rollout_reward)
+
 
     def _log_stats(self):
         if self.env_steps % self.log_interval == 0:
@@ -244,9 +244,8 @@ class LogULearner:
             self.logger.dump(step=self.env_steps)
             self.t0 = time.thread_time_ns()
 
-            self.logger.record("rollout/reward", self.rollout_reward)
 
-    def evaluate(self, n_episodes=1):
+    def evaluate(self, n_episodes=3):
         # run the current policy and return the average reward
         avg_reward = 0.
         for ep in range(n_episodes):
@@ -277,14 +276,14 @@ def main():
     # env_id = 'Taxi-v3'
     # env_id = 'CliffWalking-v0'
     # env_id = 'Acrobot-v1'
-    env_id = 'LunarLander-v2'
+    # env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
-    # env_id = 'MountainCar-v0'
+    env_id = 'MountainCar-v0'
     # env_id = 'Drug-v0'
-    from hparams import cartpole_hparams0 as config
-    agent = LogULearner(env_id, **config, device='cpu', log_interval=100,
-                        log_dir='pend', num_nets=2, render=0)
+    from hparams import mcar_hparams as config
+    agent = LogULearner(env_id, **config, device='cpu', log_interval=1000,
+                        log_dir='pend', num_nets=2, render=1)
     # agent = CustomDQN(env_id, device='cuda', **config)
 
     agent.learn(total_timesteps=1_000_000)
