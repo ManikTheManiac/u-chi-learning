@@ -1,42 +1,50 @@
 import argparse
-from LogU import LogULearner
+from darer.MultiLogU import LogULearner
 from CustomDQN import CustomDQN
 from LogURawlik import LogULearner
 from CustomPPO import CustomPPO
 # from LogU import LogULearner
 from MultiLogU import LogULearner
-from hparams import cartpole_hparams0, cartpole_dqn, cartpole_rawlik, cartpole_ppo, mcar_hparams
+from hparams import *
 import time
 
-env = 'CartPole-v1'
-env = 'MountainCar-v0'
-configs = {'logu': cartpole_hparams0, 'dqn': cartpole_dqn}
-
+# env = 'CartPole-v1'
+env = 'LunarLander-v2'
+# env = 'Acrobot-v1'
+# env = 'MountainCar-v0'
+# algo_to_config = {'logu': cartpole_hparams0, 'dqn': cartpole_dqn}
+# env_to
 
 def runner(algo):
     if algo == 'logu':
         if env == 'CartPole-v1':
-            config = cartpole_hparams0
+            config = cartpole_hparams2
         elif env == 'MountainCar-v0':
             config = mcar_hparams
-        # config = cartpole_hparams0
+        elif env == 'Acrobot-v1':
+            config = acrobot_logu
+        elif env == 'LunarLander-v2':
+            config = lunar_hparams_logu
         algo = LogULearner
     elif algo == 'dqn':
         config = cartpole_dqn
         algo = CustomDQN
     elif algo == 'ppo':
-        config = cartpole_ppo
+        if env == 'CartPole-v1':
+            config = cartpole_ppo
+        elif env == 'Acrobot-v1':
+            config = acrobot_ppo
         algo = CustomPPO
 
-    model = algo(env, **config, log_dir='ft/benchmark/mountaincar',
-                 device='cpu', log_interval=500, num_nets=1)
-    model.learn(total_timesteps=100_000)
+    model = algo(env, **config, log_dir='ft/lunar',
+                 device='cpu', log_interval=250, num_nets=1)
+    model.learn(total_timesteps=200_000)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--count', type=int, default=10)
-    parser.add_argument('-a', '--algo', type=str, default='ppo')
+    parser.add_argument('-c', '--count', type=int, default=1)
+    parser.add_argument('-a', '--algo', type=str, default='logu')
     args = parser.parse_args()
 
     start = time.time()

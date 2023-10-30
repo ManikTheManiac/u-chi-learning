@@ -1,7 +1,8 @@
 import itertools
+import gymnasium
 import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix, lil_matrix
-
+from gymnasium.spaces import Discrete
 
 def chi(u, n_states, n_actions, prior_policy=None):
     if prior_policy is None:
@@ -462,3 +463,70 @@ def gather_experience(env, training_policy, batch_size, n_jobs=1):
 
     return list(itertools.chain.from_iterable(split_experience))
 
+# From old gym code for DiscreteEnv:
+from gymnasium.utils import seeding
+
+
+# def categorical_sample(prob_n, np_random):
+#     """
+#     Sample from categorical distribution
+#     Each row specifies class probabilities
+#     """
+#     prob_n = np.asarray(prob_n)
+#     csprob_n = np.cumsum(prob_n)
+#     return (csprob_n > np_random.rand()).argmax()
+
+def categorical_sample(prob_n, np_random):
+    """
+    Sample from categorical distribution
+    Each row specifies class probabilities
+    """
+    prob_n = np.asarray(prob_n)
+    csprob_n = np.cumsum(prob_n)
+    return (csprob_n > np_random.random()).argmax()
+
+class DiscreteEnv(gymnasium.Env):
+
+    """
+    Has the following members
+    - nS: number of states
+    - nA: number of actions
+    - P: transitions (*)
+    - isd: initial state distribution (**)
+
+    (*) dictionary of lists, where
+      P[s][a] == [(probability, nextstate, reward, done), ...]
+    (**) list or array of length nS
+
+
+    """
+
+    def __init__(self, nS, nA, P, isd):
+        self.P = P
+        self.isd = isd
+        self.lastaction = None  # for rendering
+        self.nS = nS
+        self.nA = nA
+
+        self.action_space = Discrete(self.nA)
+        self.observation_space = Discrete(self.nS)
+
+        self.seed()
+        self.s = categorical_sample(self.isd, self.np_random)
+
+    def seed(self, seed=None):
+        self.np_random, seed = seeding.np_random(seed)
+        return [seed]
+
+    def reset(self):
+        self.s = categorical_sample(self.isd, self.np_random)
+        self.lastaction = None
+        return int(self.s)
+
+    def step(self, a):
+        transitions = self.P[self.s][a]
+        i = categorical_sample([t[0] for t in transitions], self.np_random)
+        p, s, r, d = transitions[i]
+        self.s = s
+        self.lastaction = a
+        return (int(s), r, d, {"prob": p})

@@ -26,7 +26,7 @@ class CustomPPO(PPO):
             self.logger.record("eval/avg_reward", self.eval_rwd)
             self.logger.dump(step=self.num_timesteps)
         super().train()
-        self.logger.dump(step=self.num_timesteps)
+        # self.logger.dump(step=self.num_timesteps)
 
     def evaluate_agent(self, n_episodes=1):
         # Run the current policy and return the average reward

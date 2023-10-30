@@ -1,21 +1,22 @@
 """Customized Frozen lake enviroment"""
 import sys
 from contextlib import closing
-
-from gym.envs.toy_text import discrete
-from gym import utils
+from tabular.utils import DiscreteEnv
+from gymnasium.envs.toy_text import FrozenLakeEnv
+from gymnasium import utils
 import numpy as np
 
 from six import StringIO
 
-class ModifiedFrozenLake(discrete.DiscreteEnv):
+class ModifiedFrozenLake(DiscreteEnv):
     """Customized version of gym environment Frozen Lake"""
 
     def __init__(
             self, desc=None, map_name="4x4", slippery=0, n_action=4,
             cyclic_mode=True, never_done=True,
             goal_attractor=0.,
-            max_reward=0., min_reward=-1.5, step_penalization=1.):
+            max_reward=0., min_reward=-1.5, step_penalization=1.,
+            render_mode=None):
 
         goal_attractor = float(goal_attractor)
 
@@ -194,8 +195,27 @@ class ModifiedFrozenLake(discrete.DiscreteEnv):
 
                     compute_transition_dynamics(action_set, action_intended)
 
+        self.nS = n_state
+        self.nA = n_action
+        # super(ModifiedFrozenLake, self).__init__(render_mode=render_mode,
+        #                                          desc=desc,
+        #                                          map_name=map_name,
+        #                                          is_slippery=slippery) #n_state, n_action, transition_dynamics, isd)
         super(ModifiedFrozenLake, self).__init__(n_state, n_action, transition_dynamics, isd)
 
+    def step(self, action):
+        transitions = self.P[self.s][action]
+        i = np.random.choice(len(transitions), p=[t[0] for t in transitions])
+        p, s, r, d = transitions[i]
+        self.s = s
+        self.lastaction = action
+        s = np.array([self.s])
+
+        return (s, r, d, False, {"prob": p})
+
+    def reset(self):
+        super(ModifiedFrozenLake, self).reset()
+        return np.array([self.s]) , {}
 
     def render(self, mode='human'):
         outfile = StringIO() if mode == 'ansi' else sys.stdout

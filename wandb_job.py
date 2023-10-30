@@ -1,22 +1,37 @@
 import argparse
 import wandb
-from LogU import LogULearner
+from darer.MultiLogU import LogULearner
+# from LogUAC import LogUActor
+# from new_logac import LogUActor
 
-env_id = 'CartPole-v1'
+# env_id = 'CartPole-v1'
+# env_id = 'MountainCar-v0'
+env_id = 'LunarLander-v2'
+# env_id = 'HalfCheetah-v4'
+# env_id = 'Pendulum-v1'
 
 
 def runner(config=None, run=None):
     # Convert nec kwargs to ints:
-    for int_kwarg in ['batch_size', 'buffer_size', 'gradient_steps', 'target_update_interval', 'train_freq']:
+    for int_kwarg in ['batch_size', 'target_update_interval', 'theta_update_interval']:
         config[int_kwarg] = int(config[int_kwarg])
+    config['buffer_size'] = 150_000
+    config['gradient_steps'] = 1
+    config['train_freq'] = 1
+    # config['hidden_dim'] = 64
+    config['learning_starts'] = 10_000
     # Remove the "learning_starts" kwarg, for now:
     # config.pop('learning_starts')
     # config.pop('policy_kwargs')
-    runs_per_hparam = 3
+    config.pop('actor_learning_rate')
+    runs_per_hparam = 2
     auc = 0
+    wandb.log({'env_id': env_id})
+
     for _ in range(runs_per_hparam):
-        model = LogULearner(env_id, **config, log_interval=500, device='cuda')
-        model.learn_online(total_timesteps=30_000)
+        model = LogULearner(env_id, **config, log_interval=500, use_wandb=True,
+                            device='cuda', render=0)
+        model.learn(total_timesteps=250_000)
         auc += model.eval_auc
     auc /= runs_per_hparam
     wandb.log({'avg_eval_auc': auc})
@@ -39,7 +54,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--count", type=int, default=100)
     parser.add_argument("--entity", type=str, default="jacobhadamczyk")
     parser.add_argument("--project", type=str, default="LogU-Cartpole")
-    parser.add_argument("--sweep_id", type=str, default="i314e03g")
+    parser.add_argument("--sweep_id", type=str, default="rbtzmhyx")
     args = parser.parse_args()
     full_sweep_id = f"{args.entity}/{args.project}/{args.sweep_id}"
 

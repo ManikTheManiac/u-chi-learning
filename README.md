@@ -1,5 +1,10 @@
 LogU learning implementation in gym (mazes and cartpole)
 
+# Simple TODOs:
+- [ ] Compare multilogu w/ and w/o the 1/A factor in chi calc.
+- [ ] Same w/ periodic updates of ref s,a,s'
+- [ ] Implement LR schedule
+
 # New (Simple) Features:
 - [x] Monitor FPS
 - [ ] Monitor min/max of logu to watch for divergence
@@ -10,9 +15,9 @@ LogU learning implementation in gym (mazes and cartpole)
 - [x] Add gradient clipping
 - [ ] More clever normalization to avoid logu divergence
 - [ ] Merge Rawlik with LogU as an option. e.g. prior_update_interval=0 for no updates, and otherwise use Rawlik iteration
+- [x] Switch to SB3 Replay Buffer
 
 # Experimental questions:
-- [ ] Why does using continuous=True in batch sampling result in nans?
 - [ ] Does stabilizing theta help stabilize logu? (i.e. fix theta to g.t. value)
 - [ ] Test the use of clipping theta (min_reward, max_reward) and logu (no theoretical bounds, but -50/50 after norm. to avoid divergence)
 - [ ] Which params most strongly affect logu oscillations?
@@ -32,8 +37,33 @@ LogU learning implementation in gym (mazes and cartpole)
 - [ ] Write tests
 - [ ] Make more off-policy / offline?
 - [ ] V learning with cloning
-- [ ] UV learning
+- [x] UV learning
 - [ ] Rawlik scheme
+
+# Notes:
+- I had to change this in SB3 code to allow for next_actions in replay buffer (stable_baselines3.common.type_aliases)
+class ReplayBufferSamples(NamedTuple):
+    observations: th.Tensor
+    actions: th.Tensor
+    next_observations: th.Tensor
+    next_actions: th.Tensor
+    dones: th.Tensor
+    rewards: th.Tensor
+
+I added this line to the `gymnasium/envs/__init__.py` file:
+```
+register(
+    id="Simple-v0",
+    entry_point="gymnasium.envs.classic_control.simple_env:SimpleEnv",
+    max_episode_steps=10,
+    reward_threshold=1.0,
+)
+```
+I also placed "simple_env" in classic control folder.
+
+- Life saver for mujoco setup: https://pytorch.org/rl/reference/generated/knowledge_base/MUJOCO_INSTALLATION.html
+
+- Important line when facing GL error: export MUJOCO_GL="glfw"
 
 
 Model-based ground truth comparisons with tabular algorithms:
