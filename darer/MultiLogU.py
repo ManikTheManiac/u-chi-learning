@@ -7,10 +7,6 @@ from stable_baselines3.common.buffers import ReplayBuffer
 import wandb
 from Models import LogUNet, OnlineNets, Optimizers, TargetNets
 from utils import env_id_to_envs, logger_at_folder
-from stable_baselines3.common.preprocessing import preprocess_obs
-# raise warning level for debugger:
-import warnings
-# warnings.filterwarnings("error")
 
 
 class LogULearner:
@@ -60,12 +56,11 @@ class LogULearner:
         self.learning_starts = learning_starts
         self.use_wandb = use_wandb
 
-        # self.replay_buffer = Memory(buffer_size, device=device)
         self.replay_buffer = ReplayBuffer(buffer_size=buffer_size,
                                           observation_space=self.env.observation_space,
                                           action_space=self.env.action_space,
                                           n_envs=1,
-                                          handle_timeout_termination=False,
+                                          handle_timeout_termination=True,
                                           device=device)
         self.ref_action = None
         self.ref_state = None
@@ -211,8 +206,11 @@ class LogULearner:
                 episode_reward += reward
                 # action = torch.Tensor([action]).to(self.device)
                 action = np.array([action])
+                state = np.array([state])
+                next_state = np.array([next_state])
+                # print(infos)
                 self.replay_buffer.add(
-                    state, next_state, action, reward, terminated, infos)
+                    state, next_state, action, reward, terminated, [infos])
                 state = next_state
 
                 self._log_stats()
@@ -290,15 +288,15 @@ class LogULearner:
 def main():
     env_id = 'CartPole-v1'
     # env_id = 'Taxi-v3'
-    env_id = 'CliffWalking-v0'
+    # env_id = 'CliffWalking-v0'
     # env_id = 'Acrobot-v1'
-    # env_id = 'LunarLander-v2'
+    env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
     # env_id = 'Drug-v0'
-    from hparams import mcar_hparams2 as config
-    agent = LogULearner(env_id, **config, device='cuda', log_interval=1000,
+    from hparams import cartpole_hparams0 as config
+    agent = LogULearner(env_id, **config, device='cpu', log_interval=100,
                         log_dir='pend', num_nets=2, render=0)
     # agent = CustomDQN(env_id, device='cuda', **config)
 

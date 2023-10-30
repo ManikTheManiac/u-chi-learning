@@ -276,50 +276,6 @@ class OnlineNets:
         for net in self:
             torch.nn.utils.clip_grad_norm_(net.parameters(), max_grad_norm)
 
-
-# class OnlineNets():
-#     def __init__(self, list_of_nets):
-#         self.nets = list_of_nets
-
-#     def __len__(self):
-#         return len(self.nets)
-
-#     def __iter__(self):
-#         return iter(self.nets)
-
-#     def greedy_action(self, state):
-#         with torch.no_grad():
-#             logu = torch.stack([net(state) for net in self.nets])
-#             logu = logu.squeeze(1)
-#             logu = torch.min(logu, dim=0)[0]
-#             greedy_action = logu.argmax()
-#             # greedy_actions = [net(state).argmax() for net in self.nets]
-#             # greedy_action = np.random.choice(greedy_actions)
-#         return greedy_action.item()
-
-#     def choose_action(self, state, prior=None):
-#         # Get a sample from each net, then sample uniformly over them:
-#         actions = [net.choose_action(state) for net in self.nets]
-#         if prior is None:
-#             action = np.random.choice(actions)
-#         else:
-#             # Use the prior to weight the actions:
-#             p_actions = [net(state) for net in prior.nets]
-#             # mix the two "experts":
-#             p_actions = torch.stack(p_actions)
-#             p_actions = p_actions * prior
-
-#             action = np.random.choice(actions, p=prior)
-#         # perhaps re-weight this based on pessimism?
-#         return action
-
-#     def parameters(self):
-#         return [net.parameters() for net in self.nets]
-
-#     def clip_grad_norm(self, max_grad_norm):
-#         for net in self.nets:
-#             torch.nn.utils.clip_grad_norm_(net.parameters(), max_grad_norm)
-
 class LogUsa(nn.Module):
     def __init__(self, env, hidden_dim=256, device='cuda'):
         super(LogUsa, self).__init__()
@@ -349,11 +305,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 
-LOG_SIG_MAX = 2
-LOG_SIG_MIN = -20
+LOG_SIG_MAX = 5
+LOG_SIG_MIN = -30
 epsilon = 1e-6
 
-epsilon = 1e-6
 
 # Initialize Policy weights
 def weights_init_(m):
@@ -362,24 +317,24 @@ def weights_init_(m):
         torch.nn.init.constant_(m.bias, 0)
 
 class GaussianPolicy(nn.Module):
-    def __init__(self, hidden_dim, observation_space, action_space, device='cpu'):
+    def __init__(self, hidden_dim, observation_space, action_space, use_action_bounds=False, device='cpu'):
         super(GaussianPolicy, self).__init__()
         self.device = device
         num_inputs = get_flattened_obs_dim(observation_space)
         num_actions = get_action_dim(action_space)
         
-        self.linear1 = nn.Linear(num_inputs, hidden_dim, device=self.device)
-        self.linear2 = nn.Linear(hidden_dim, hidden_dim, device=self.device)
+        self.linear1 = nn.Linear(num_inputs, hidden_dim)
+        self.linear2 = nn.Linear(hidden_dim, hidden_dim)
 
-        self.mean_linear = nn.Linear(hidden_dim, num_actions, device=self.device)
-        self.log_std_linear = nn.Linear(hidden_dim, num_actions, device=self.device)
+        self.mean_linear = nn.Linear(hidden_dim, num_actions)
+        self.log_std_linear = nn.Linear(hidden_dim, num_actions)
 
         self.apply(weights_init_)
 
         # action rescaling
         if action_space is None:
-            self.action_scale = torch.tensor(1., device=self.device)
-            self.action_bias = torch.tensor(0., device=self.device)
+            self.action_scale = torch.tensor(1.)#, device=self.device)
+            self.action_bias = torch.tensor(0.)#, device=self.device)
         else:
             self.action_scale = torch.FloatTensor(
                 (action_space.high - action_space.low) / 2.)#, device=self.device)
@@ -387,6 +342,7 @@ class GaussianPolicy(nn.Module):
                 (action_space.high + action_space.low) / 2.)#, device=self.device)
             
         self.observation_space = observation_space
+        self.to(device)
 
     def forward(self, obs):
         obs = torch.Tensor(obs).to(self.device)
@@ -401,6 +357,7 @@ class GaussianPolicy(nn.Module):
     def sample(self, state):
         mean, log_std = self.forward(state)
         std = log_std.exp()
+        # print(std)
         normal = Normal(mean, std)
         x_t = normal.rsample()  # for reparameterization trick (mean + std * N(0,1))
         y_t = torch.tanh(x_t)
@@ -418,6 +375,3 @@ class GaussianPolicy(nn.Module):
         self.action_bias = self.action_bias.to(device)
         return super(GaussianPolicy, self).to(device)
     
-
-if __name__ == '__main__':
-    x= LogUNet(gym.make('CartPole-v1'))

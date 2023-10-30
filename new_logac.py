@@ -78,7 +78,7 @@ class LogUActor:
                                           observation_space=self.env.observation_space,
                                           action_space=self.env.action_space,
                                           n_envs=1,
-                                          handle_timeout_termination=False,
+                                          handle_timeout_termination=True,
                                           device=device)
         self.ref_action = None
         self.ref_state = None
@@ -105,10 +105,11 @@ class LogUActor:
                                                hidden_dim=self.hidden_dim,
                                                device=self.device)
                                         for _ in range(self.num_nets)])
-        self.target_logus.load_state_dict(
+        self.target_logus.load_state_dicts(
             [logu.state_dict() for logu in self.online_logus])
         self.actor = GaussianPolicy(self.hidden_dim, 
                                     self.env.observation_space, self.env.action_space,
+                                    use_action_bounds=False,
                                     device=self.device)
         # send the actor to device:
         self.actor.to(self.device)
@@ -166,7 +167,7 @@ class LogUActor:
                 
                 
                 new_theta = torch.mean((self.beta * rewards + (1-dones)*next_logu - curr_logu) / -self.beta)
-                new_theta = torch.min(new_theta)
+                # new_theta = torch.min(new_theta)
                 expected_curr_logu = expected_curr_logu.squeeze(1)
 
             
@@ -245,8 +246,6 @@ class LogUActor:
                 else:
                     with torch.no_grad():
                         noisy_action, _, _ = self.actor.sample(state)
-                        # add some noise
-                        # action += np.random.normal(0, 0.05, size=action.shape)#.clamp(-0.2, 0.2)
                         noisy_action = noisy_action.cpu().numpy()
                 next_state, reward, terminated, truncated, infos = self.env.step(
                     noisy_action)
@@ -272,6 +271,7 @@ class LogUActor:
                 self.env_steps += 1
 
                 episode_reward += reward
+                infos = [infos]
                 self.replay_buffer.add(
                     state, next_state, noisy_action, reward, terminated, infos)
                 state = next_state
@@ -340,7 +340,7 @@ class LogUActor:
             while not done:
                 # self.actor.set_training_mode(False)
                 with torch.no_grad():
-                    _, _, action = self.actor.sample(state)  # , deterministic=True)
+                    _, logprob, action = self.actor.sample(state)  # , deterministic=True)
                     action = action.cpu().numpy()
                 next_state, reward, terminated, truncated, info = self.eval_env.step(
                     action)
@@ -358,17 +358,19 @@ class LogUActor:
         raise NotImplementedError
 
 def main():
-    env_id = 'LunarLanderContinuous-v2'
+    # env_id = 'LunarLanderContinuous-v2'
+    # env_id = 'BipedalWalker-v3'
+    # env_id = 'CartPole-v1'
     # env_id = 'Pendulum-v1'
     # env_id = 'Hopper-v4'
-    # env_id = 'HalfCheetah-v4'
+    env_id = 'HalfCheetah-v4'
     # env_id = 'Ant-v4'
     # env_id = 'Simple-v0'
     from darer.hparams import cheetah_hparams2 as config
     agent = LogUActor(env_id, **config, device='cpu',
                       num_nets=2, learning_starts=10_000,
                       log_dir='pend',
-                      render=1, max_grad_norm=10, log_interval=1500)
+                      render=0, max_grad_norm=10, log_interval=1500)
     agent.learn(total_timesteps=5_000_000)
 
 
