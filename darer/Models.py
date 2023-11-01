@@ -25,8 +25,8 @@ class LogUNet(nn.Module):
      
     def forward(self, x):
         if not isinstance(x, torch.Tensor):
-            x = torch.tensor(x, device=self.device)#, dtype=torch.float32).detach()  # Convert to PyTorch tensor
-
+            x = torch.tensor(x, device=self.device, dtype=torch.float32)  # Convert to PyTorch tensor
+        x = x.detach()
         x = preprocess_obs(x, self.env.observation_space)
 
         x = self.fc1(x)
@@ -49,11 +49,11 @@ class LogUNet(nn.Module):
                 return a.item()
 
             # First subtract a baseline:
-            # logu = logu - (torch.max(logu) + torch.min(logu))/2
-            # dist = torch.exp(logu) * prior
-            # # dist = dist / torch.sum(dist)
-            # c = Categorical(dist)
-            c = Categorical(logits=logu*prior)
+            logu = logu - (torch.max(logu) + torch.min(logu))/2
+            dist = torch.exp(logu) * prior
+            # dist = dist / torch.sum(dist)
+            c = Categorical(dist)
+            # c = Categorical(logits=logu*prior)
             a = c.sample()
 
         return a.item()
@@ -199,16 +199,27 @@ class OnlineNets():
     def __iter__(self):
         return iter(self.nets)
 
+    # def greedy_action(self, state):
+    #     with torch.no_grad():
+    #         logu = torch.stack([net(state) for net in self.nets])
+    #         logu = logu.squeeze(1)
+    #         # logu = torch.min(logu, dim=0)[0]
+    #         # greedy_action = logu.argmax()
+    #         greedy_actions = [net(state).argmax().cpu() for net in self.nets]
+    #         greedy_action = np.random.choice(greedy_actions)
+    #     return np.array(greedy_action.item())
+    #     # return np.array(greedy_action.item())
+    
     def greedy_action(self, state):
         with torch.no_grad():
-            logu = torch.stack([net(state) for net in self.nets])
-            logu = logu.squeeze(1)
-            # logu = torch.min(logu, dim=0)[0]
+            # logu = torch.stack([net(state) for net in self.nets])
+            # logu = logu.squeeze(1)
+            # logu = torch.max(logu, dim=0)[0]
             # greedy_action = logu.argmax()
             greedy_actions = [net(state).argmax().cpu() for net in self.nets]
             greedy_action = np.random.choice(greedy_actions)
-        return np.array(greedy_action.item())
-        # return np.array(greedy_action.item())
+        return greedy_action
+        # return greedy_action.item()
 
     def choose_action(self, state):
         # Get a sample from each net, then sample uniformly over them:

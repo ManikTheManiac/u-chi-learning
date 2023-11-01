@@ -64,7 +64,7 @@ class LogULearner:
                                           observation_space=self.env.observation_space,
                                           action_space=self.env.action_space,
                                           n_envs=1,
-                                          handle_timeout_termination=True,
+                                          handle_timeout_termination=False,
                                           device=device)
         self.nA = self.env.action_space.n
         self.ref_action = None
@@ -75,7 +75,7 @@ class LogULearner:
         self.num_episodes = 0
 
         # Set up the logger:
-        self.logger = logger_at_folder(log_dir, algo_name=f'rewrite2')
+        self.logger = logger_at_folder(log_dir, algo_name=f'rewrite4')
         # Log the hparams:
         for key in HPARAM_ATTRS:
             self.logger.record(f"hparams/{key}", self.__dict__[key])
@@ -207,7 +207,7 @@ class LogULearner:
                 train_this_step = (self.train_freq == -1 and terminated) or \
                     (self.train_freq != -1 and self.env_steps % self.train_freq == 0)
                 if train_this_step:
-                    if self.env_steps > self.batch_size: #self.learning_starts:
+                    if self.env_steps > self.learning_starts: #self.batch_size: #
                         self.train()
 
                 if self.env_steps % self.target_update_interval == 0:
@@ -253,7 +253,7 @@ class LogULearner:
             self.t0 = time.thread_time_ns()
 
 
-    def evaluate(self, n_episodes=2):
+    def evaluate(self, n_episodes=5):
         # run the current policy and return the average reward
         avg_reward = 0.
         for ep in range(n_episodes):
@@ -279,14 +279,14 @@ def main():
     env_id = 'CartPole-v1'
     # env_id = 'Taxi-v3'
     # env_id = 'CliffWalking-v0'
-    # env_id = 'Acrobot-v1'
+    env_id = 'Acrobot-v1'
     # env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
     # env_id = 'Drug-v0'
-    from hparams import cartpole_hparams2 as config
-    agent = LogULearner(env_id, **config, device='cpu', log_interval=500,
+    from hparams import acrobot_logu2 as config
+    agent = LogULearner(env_id, **config, device='cuda', log_interval=500,
                         log_dir='pend', num_nets=1, render=0)
 
     agent.learn(total_timesteps=1_000_000)

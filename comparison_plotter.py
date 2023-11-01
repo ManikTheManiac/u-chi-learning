@@ -10,7 +10,7 @@ sns.set_theme(style="darkgrid")
 algo_to_log_interval = {'DQN': 500, 'PPO': 4000,
                         'LogU0': 500, 'RawLik': 500, 'LogU2nets': 500}
 
-desired_algos = ['PPO', 'newtuned', '1kls', 'acro1']
+desired_algos = ['PPO', 'newtuned', '1kls', 'acro1', 'rewrite3', 'rewrite4']
 
 def plotter(folder, metrics=['step', 'eval/avg_reward'], ylim=None):
     # First, scan the folder for the different algorithms:
@@ -34,11 +34,8 @@ def plotter(folder, metrics=['step', 'eval/avg_reward'], ylim=None):
 
         # Convert the tensorboard file to a pandas dataframe:
         log_file = f'{folder}/{subfolder}/{file}'
-<<<<<<< HEAD
-        print("Processing", subfolder, "...")
-=======
         print("Processing", subfolder)
->>>>>>> main
+
         reader = SummaryReader(log_file)
         df = reader.scalars
         # filter the desired metrics:
@@ -81,11 +78,11 @@ if __name__ == '__main__':
     # plotter('ft/benchmark/cartpole')
     # plotter('ft/benchmark/mountaincar')
 
-    folder = 'ft/lunar'
+    folder = 'ft/acro'
     # folder = 'ft/benchmark'
     # folder = 'multinasium'
     # plotter(folder=folder, metrics=['step', 'train/loss', 'loss'])
-    plotter(folder=folder, ylim=(-100, 300), metrics=['step', 'eval/avg_reward'])
+    plotter(folder=folder,  metrics=['step', 'eval/avg_reward'])
     plotter(folder=folder, metrics=['step', 'rollout/reward'])
     plotter(folder=folder, metrics=['step', 'train/theta', 'theta'])
     plotter(folder=folder, metrics=['step', 'train/avg logu', 'avg logu'])
