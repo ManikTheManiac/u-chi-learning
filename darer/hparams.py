@@ -171,13 +171,13 @@ acrobot_logu = {
 }
 
 acrobot_logu2 = {
-    'beta': 1.2,
+    'beta': 3.12,
     'batch_size': 635,
     'buffer_size': 100_000,
     'gradient_steps': 1,
     'learning_rate': 9.e-5,
     'target_update_interval': 4,
-    'tau': 0.6,
+    'tau': 0.95,
     'tau_theta': 0.98,
     'train_freq': 1,
     'hidden_dim': 128,

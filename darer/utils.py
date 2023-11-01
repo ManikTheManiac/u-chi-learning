@@ -5,6 +5,10 @@ import time
 
 
 def logger_at_folder(log_dir=None, algo_name=None):
+    # ensure no _ in algo_name:
+    if '_' in algo_name:
+        print("WARNING: '_' not allowed in algo_name (used for indexing). Replacing with '-'.")
+    algo_name = algo_name.replace('_', '-')
     # Generate a logger object at the specified folder:
     if log_dir is not None:
         files = os.listdir(log_dir)

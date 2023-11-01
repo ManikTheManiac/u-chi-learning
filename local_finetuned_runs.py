@@ -21,7 +21,7 @@ def runner(algo):
         elif env == 'MountainCar-v0':
             config = mcar_hparams
         elif env == 'Acrobot-v1':
-            config = acrobot_logu2
+            config = acrobot_logu
         elif env == 'LunarLander-v2':
             config = lunar_hparams_logu
         algo = LogULearner
@@ -36,7 +36,8 @@ def runner(algo):
         algo = CustomPPO
 
     model = algo(env, **config, log_dir='ft/acro',
-                 device='cpu', log_interval=250, num_nets=1)
+                 device='cuda', log_interval=250, num_nets=2,
+                 aggregator='max')
     model.learn(total_timesteps=50_000)
 
 

@@ -49,63 +49,11 @@ class LogUNet(nn.Module):
                 return a.item()
 
             # First subtract a baseline:
-            logu = logu - (torch.max(logu) + torch.min(logu))/2
-            dist = torch.exp(logu) * prior
+            # logu = logu - (torch.max(logu) + torch.min(logu))/2
+            # dist = torch.exp(logu) * prior
             # dist = dist / torch.sum(dist)
-            c = Categorical(dist)
-            # c = Categorical(logits=logu*prior)
-            a = c.sample()
-
-        return a.item()
-
-
-class UNet(nn.Module):
-    def __init__(self, env, device='cuda', hidden_dim=256):
-        super(UNet, self).__init__()
-        self.env = env
-        self.device = device
-        if isinstance(env.observation_space, spaces.Discrete):
-            self.nS = env.observation_space.n
-        elif isinstance(env.observation_space, spaces.Box):
-            self.nS = env.observation_space.shape[0]
-
-        self.nA = env.action_space.n
-        self.fc1 = nn.Linear(self.nS, hidden_dim, device=self.device)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim, device=self.device)
-        self.fc3 = nn.Linear(hidden_dim, self.nA, device=self.device)
-        self.relu = nn.Tanh()
-        # self.relu = nn.LeakyReLU()
-     
-    def forward(self, x):
-        if not isinstance(x, torch.Tensor):
-            x = torch.tensor(x, device=self.device, dtype=torch.float32).detach()  # Convert to PyTorch tensor
-
-        x = preprocess_obs(x, self.env.observation_space)
-
-        x = self.fc1(x)
-        x = self.relu(x)
-        x = self.fc2(x)
-        x = self.relu(x)
-        x = self.fc3(x)
-
-        return torch.abs(x)
-        # return self.relu(x+4) + 1e-6
-        
-    def choose_action(self, state, greedy=False):
-        with torch.no_grad():
-            u = self.forward(state)
-
-            if greedy:
-                a = u.argmax()
-                return a.item()
-
-            # First subtract a baseline:
-            # u = u - (torch.max(u) + torch.min(u))/2
-            # print(u)
-            dist = u * 1 / self.nA
-            dist = dist / torch.sum(dist)
-            # print(dist)
-            c = Categorical(dist)
+            # c = Categorical(dist)
+            c = Categorical(logits=logu*prior)
             a = c.sample()
 
         return a.item()
@@ -190,8 +138,14 @@ class OnlineNets():
     Args:
         list_of_nets (list): A list of online networks.
     """
-    def __init__(self, list_of_nets):
+    def __init__(self, list_of_nets, aggregator='min'):
         self.nets = list_of_nets
+        if aggregator == 'min':
+            self.aggregator = torch.min
+        elif aggregator == 'mean':
+            self.aggregator = torch.mean
+        elif aggregator == 'max':
+            self.aggregator = torch.max
 
     def __len__(self):
         return len(self.nets)
@@ -212,12 +166,12 @@ class OnlineNets():
     
     def greedy_action(self, state):
         with torch.no_grad():
-            # logu = torch.stack([net(state) for net in self.nets])
-            # logu = logu.squeeze(1)
-            # logu = torch.max(logu, dim=0)[0]
-            # greedy_action = logu.argmax()
-            greedy_actions = [net(state).argmax().cpu() for net in self.nets]
-            greedy_action = np.random.choice(greedy_actions)
+            logu = torch.stack([net(state) for net in self.nets])
+            logu = logu.squeeze(1)
+            logu = self.aggregator(logu, dim=0)[0]
+            greedy_action = logu.argmax()
+            # greedy_actions = [net(state).argmax().cpu() for net in self.nets]
+            # greedy_action = np.random.choice(greedy_actions)
         return greedy_action
         # return greedy_action.item()
 

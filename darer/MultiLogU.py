@@ -11,6 +11,7 @@ HPARAM_ATTRS = {'beta', 'learning_rate', 'batch_size', 'buffer_size',
                 'hidden_dim', 'num_nets', 'tau_theta', 'gradient_steps',
                 'train_freq', 'max_grad_norm', 'learning_starts'}
 
+str_to_aggregator = {'min': torch.min, 'max': torch.max, 'mean': torch.mean}
 class LogULearner:
 
     def __init__(self,
@@ -36,6 +37,7 @@ class LogULearner:
                  log_interval=1000,
                  save_checkpoints=False,
                  use_wandb=False,
+                 aggregator='max'
                  ) -> None:
         
         self.env, self.eval_env = env_id_to_envs(env_id, render)
@@ -59,6 +61,8 @@ class LogULearner:
         self.prior = None
         self.learning_starts = learning_starts
         self.use_wandb = use_wandb
+        self.aggregator = aggregator
+        self.aggregator_fn = str_to_aggregator[aggregator]
 
         self.replay_buffer = ReplayBuffer(buffer_size=buffer_size,
                                           observation_space=self.env.observation_space,
@@ -75,7 +79,7 @@ class LogULearner:
         self.num_episodes = 0
 
         # Set up the logger:
-        self.logger = logger_at_folder(log_dir, algo_name=f'rewrite4')
+        self.logger = logger_at_folder(log_dir, algo_name=f'{aggregator}-theta')
         # Log the hparams:
         for key in HPARAM_ATTRS:
             self.logger.record(f"hparams/{key}", self.__dict__[key])
@@ -89,7 +93,9 @@ class LogULearner:
 
     def _initialize_networks(self):
         self.online_logus = OnlineNets([LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
-                                                     for _ in range(self.num_nets)])
+                                                     for _ in range(self.num_nets)],
+                                                     aggregator=self.aggregator)
+        
         self.target_logus = TargetNets([LogUNet(self.env, hidden_dim=self.hidden_dim, device=self.device)
                                                      for _ in range(self.num_nets)])
         self.target_logus.load_state_dicts([logu.state_dict() for logu in self.online_logus])
@@ -124,7 +130,7 @@ class LogULearner:
                                             for target_logu in target_next_logus], dim=-1)
                 target_next_logu = torch.log(target_next_u)
 
-                next_logu, _ = torch.min(target_next_logu, dim=1)
+                next_logu, _ = self.aggregator_fn(target_next_logu, dim=1)
                 if isinstance(self.env.observation_space, gym.spaces.Discrete):
                     pass
                 else:
@@ -167,7 +173,7 @@ class LogULearner:
         # Log both theta values:
         for idx, new_theta in enumerate(new_thetas.T):
             self.logger.record(f"train/theta_{idx}", new_theta.mean().item())
-        new_theta = torch.max(new_thetas.mean(dim=0), dim=0)[0]
+        new_theta = self.aggregator_fn(new_thetas.mean(dim=0), dim=0)[0]
 
         # Can't use env_steps b/c we are inside the learn function which is called only
         # every train_freq steps:
@@ -262,6 +268,7 @@ class LogULearner:
             n_steps = 0
             while not done:
                 action = self.online_logus.greedy_action(state)
+                action = action.item()
                 # action = self.online_logus.choose_action(state)
                 n_steps += 1
 
@@ -280,14 +287,14 @@ def main():
     # env_id = 'Taxi-v3'
     # env_id = 'CliffWalking-v0'
     env_id = 'Acrobot-v1'
-    # env_id = 'LunarLander-v2'
+    env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
-    # env_id = 'MountainCar-v0'
+    env_id = 'MountainCar-v0'
     # env_id = 'Drug-v0'
     from hparams import acrobot_logu2 as config
-    agent = LogULearner(env_id, **config, device='cuda', log_interval=500,
-                        log_dir='pend', num_nets=1, render=0)
+    agent = LogULearner(env_id, **config, device='cpu', log_interval=500,
+                        log_dir='pend', num_nets=2, render=0, aggregator='max')
 
     agent.learn(total_timesteps=1_000_000)
 
