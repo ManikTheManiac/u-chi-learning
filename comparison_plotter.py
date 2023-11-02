@@ -16,13 +16,14 @@ all_metrics = [
     'rollout/reward', 'eval/avg_reward', 'train/theta', 'train/avg logu'
 ]
 sns.set_theme(style="darkgrid")
-desired_algos = ['PPO', 'newtuned', '1kls', 'acro1', 'min', 'min-theta', 'max-theta', 'max']
+desired_algos = ['PPO', 'DQN', 'newtuned', '1kls', 'acro1', 'min', 'min-theta', 'max-theta', 'max']
 
 def plotter(folder, x_axis='step', metrics=all_metrics, 
             xlim=None, ylim=None):
 
     algo_data = pd.DataFrame()
     subfolders = glob(os.path.join(folder, '*'))
+    print("Found subfolders:", subfolders)
 
     # Collect all the data into one dataframe for parsing into figures:
     for subfolder in subfolders:
@@ -31,7 +32,7 @@ def plotter(folder, x_axis='step', metrics=all_metrics,
 
         algo_name = os.path.basename(subfolder).split('_')[0]
         if algo_name not in desired_algos:
-            continue
+            print(f"Skipping {algo_name}, not in desired_algos.")
 
         log_files = glob(os.path.join(subfolder, '*.tfevents.*'))
         if not log_files:
@@ -83,8 +84,8 @@ def plotter(folder, x_axis='step', metrics=all_metrics,
             print("No data to plot.")
 
 if __name__ == "__main__":
-    folder = 'ft/acro'
-    plotter(folder=folder)
+    folder = 'ft/mcar'
+    plotter(folder=folder, metrics=['eval/avg_reward'])
     # plotter(folder=folder, metrics=['step', 'rollout/reward'])
     # plotter(folder=folder, metrics=['step', 'train/theta', 'theta'])
     # plotter(folder=folder, metrics=['step', 'train/avg logu', 'avg logu'])
