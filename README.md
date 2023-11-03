@@ -66,6 +66,10 @@ I also placed "simple_env" in classic control folder.
 
 - Important line when facing GL error: export MUJOCO_GL="glfw"
 
+Acrobot performance on logu (note logscale x axis):
+![auc][scaling_logu]
+And same for SB3's DQN with their hparams (huggingface):
+![auc][scaling_dqn]
 
 Model-based ground truth comparisons with tabular algorithms:
 
@@ -79,3 +83,5 @@ Model-free ground truth comparisons:
 
 [policy_figure]: figures/policy_MF.png
 [eigvec_figure]: figures/left_eigenvector_MF.png
+[scaling_logu]: Acrobot-v1.png 
+[scaling_dqn]: Acrobot-v1-dqn.png
