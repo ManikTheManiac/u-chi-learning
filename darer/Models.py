@@ -24,11 +24,11 @@ class LogUNet(nn.Module):
                 # Use a CNN:
                 n_channels = env.observation_space.shape[2]
                 model = nn.Sequential(
-                    nn.Conv2d(n_channels, 32, kernel_size=8, stride=4),
+                    nn.Conv2d(n_channels, 64, kernel_size=8, stride=4),
                     activation(),
-                    nn.Conv2d(32, 16, kernel_size=4, stride=2),
+                    nn.Conv2d(64, 32, kernel_size=4, stride=2),
                     activation(),
-                    nn.Conv2d(16, 16, kernel_size=3, stride=1),
+                    nn.Conv2d(32, 32, kernel_size=3, stride=1),
                     activation(),
                     nn.Flatten(start_dim=1, end_dim=-1),
                 )
@@ -47,7 +47,6 @@ class LogUNet(nn.Module):
                     nn.Linear(hidden_dim, hidden_dim),
                     activation(),
                     nn.Linear(hidden_dim, self.nA),
-                    activation(),
                 ))
             else:
                 self.nS = env.observation_space.shape[0]
@@ -70,7 +69,7 @@ class LogUNet(nn.Module):
     def forward(self, x):
         if not isinstance(x, torch.Tensor):
             x = torch.tensor(x, device=self.device, dtype=torch.float32)  # Convert to PyTorch tensor
-        x = x.detach()
+        # x = x.detach()
         x = preprocess_obs(x, self.env.observation_space)
         # Reshape the image:
         if self.is_image_space:

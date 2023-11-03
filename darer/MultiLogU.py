@@ -297,12 +297,12 @@ def main():
     # env_id = 'CliffWalking-v0'
     env_id = 'Acrobot-v1'
     # env_id = 'LunarLander-v2'
-    # env_id = 'Pong-v4'
+    env_id = 'Pong-v4'
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
     # env_id = 'Drug-v0'
-    from hparams import acrobot_logu as config
-    agent = LogULearner(env_id, **config, device='cuda', log_interval=500,
+    from hparams import pong_logu as config
+    agent = LogULearner(env_id, **config, device='cuda', log_interval=5000,
                         log_dir='pend', num_nets=2, render=0, aggregator='max')
 
     agent.learn(total_timesteps=1_000_000)

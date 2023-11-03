@@ -172,15 +172,15 @@ acrobot_logu = {
 }
 
 pong_logu = {
-    'beta': 2,
-    'batch_size': 855,
-    'buffer_size': 5_000,
+    'beta': 1,
+    'batch_size': 32,
+    'buffer_size': 50_000,
     'gradient_steps': 1,
     'learning_rate': 7.e-3,
-    'target_update_interval': 10,
+    'target_update_interval': 100,
     'tau': 0.95,
-    'tau_theta': 0.90,
-    'train_freq': 10,
+    'tau_theta': 0.98,
+    'train_freq': 4,
     'learning_starts': 15_000
 }
 
