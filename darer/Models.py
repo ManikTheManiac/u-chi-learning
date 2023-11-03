@@ -26,7 +26,7 @@ class LogUNet(nn.Module):
     def forward(self, x):
         if not isinstance(x, torch.Tensor):
             x = torch.tensor(x, device=self.device, dtype=torch.float32)  # Convert to PyTorch tensor
-        x = x.detach()
+        # x = x.detach()
         x = preprocess_obs(x, self.env.observation_space)
 
         x = self.fc1(x)
