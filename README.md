@@ -5,7 +5,7 @@ LogU learning implementation in gym (mazes and cartpole)
 - [ ] Same w/ periodic updates of ref s,a,s'
 - [ ] Implement LR schedule
 - [ ] Create a folder when one is missing for logging
-
+- [ ] Correct log interval for PPO
 # New (Simple) Features:
 - [x] Monitor FPS
 - [ ] Monitor min/max of logu to watch for divergence

@@ -138,16 +138,22 @@ class LogULearner:
                 # When an episode terminates, next_logu should be theta or zero?:
                 assert next_logu.shape == dones.shape
                 next_logu = next_logu * (1 - dones) + self.theta * dones
+
                 # "Backup" eigenvector equation:
                 expected_curr_logu = self.beta * (rewards + self.theta) + next_logu
                 expected_curr_logu = expected_curr_logu.squeeze(1)
+                # clamp the logu values to avoid overflow:
+                # expected_curr_logu = torch.clamp(expected_curr_logu, -10, 10)
                 # calculate theta in a similar way:
                 # next_chi = torch.stack([torch.exp(next_logu_val).sum(dim=-1) / self.env.action_space.n
                 # new_thetas = rewards + 1/self.beta * (next_chi - curr_logu)
 
-            
+            # curr_logu = torch.clamp(curr_logu, -10, 10)
+
             self.logger.record("train/theta", self.theta.item())
             self.logger.record("train/avg logu", curr_logu.mean().item())
+            self.logger.record("train/min logu", curr_logu.min().item())
+            self.logger.record("train/max logu", curr_logu.max().item())
 
             # Calculate the logu ("critic") loss:
             loss = 0.5*sum(self.loss_fn(logu, expected_curr_logu)
@@ -163,11 +169,11 @@ class LogULearner:
             self.online_logus.clip_grad_norm(self.max_grad_norm)
 
             # Log the max gradient:
-            total_norm = torch.max(torch.stack(
-                        [px.grad.detach().abs().max() 
-                         for p in self.online_logus.parameters() for px in p]
-                        ))
-            self.logger.record("train/max_grad", total_norm.item())
+            # total_norm = torch.max(torch.stack(
+            #             [px.grad.detach().abs().max() 
+            #              for p in self.online_logus.parameters() for px in p]
+            #             ))
+            # self.logger.record("train/max_grad", total_norm.item())
             self.optimizers.step()
         # new_thetas = torch.clamp(new_thetas, 1, -1)
         # Log both theta values:
@@ -213,12 +219,15 @@ class LogULearner:
                 train_this_step = (self.train_freq == -1 and terminated) or \
                     (self.train_freq != -1 and self.env_steps % self.train_freq == 0)
                 if train_this_step:
-                    if self.env_steps > self.learning_starts: #self.batch_size: #
+                    if self.env_steps > self.batch_size:#self.learning_starts: # 
                         self.train()
 
                 if self.env_steps % self.target_update_interval == 0:
                     # Do a Polyak update of parameters:
                     self.target_logus.polyak(self.online_logus, self.tau)
+
+                    # Update beta:
+                    # self.beta = min(20, self.beta+1e-2)
 
                 #TODO: implement beta schedule
                 self.env_steps += 1
@@ -259,7 +268,7 @@ class LogULearner:
             self.t0 = time.thread_time_ns()
 
 
-    def evaluate(self, n_episodes=5):
+    def evaluate(self, n_episodes=1):
         # run the current policy and return the average reward
         avg_reward = 0.
         for ep in range(n_episodes):
@@ -287,13 +296,13 @@ def main():
     # env_id = 'Taxi-v3'
     # env_id = 'CliffWalking-v0'
     env_id = 'Acrobot-v1'
-    env_id = 'LunarLander-v2'
-    # env_id = 'Pong-v'
+    # env_id = 'LunarLander-v2'
+    # env_id = 'Pong-v4'
     # env_id = 'FrozenLake-v1'
-    env_id = 'MountainCar-v0'
+    # env_id = 'MountainCar-v0'
     # env_id = 'Drug-v0'
-    from hparams import acrobot_logu2 as config
-    agent = LogULearner(env_id, **config, device='cpu', log_interval=500,
+    from hparams import acrobot_logu as config
+    agent = LogULearner(env_id, **config, device='cuda', log_interval=500,
                         log_dir='pend', num_nets=2, render=0, aggregator='max')
 
     agent.learn(total_timesteps=1_000_000)

@@ -1,26 +1,70 @@
 import torch
 import torch.nn as nn
 from torch.distributions import Categorical
-from stable_baselines3.common.preprocessing import preprocess_obs, get_action_dim, get_flattened_obs_dim, get_obs_shape
+from stable_baselines3.common.preprocessing import is_image_space, preprocess_obs, get_action_dim, get_flattened_obs_dim, get_obs_shape
 import numpy as np
 from stable_baselines3.common.utils import zip_strict
 from gymnasium import spaces
 import gymnasium as gym
 
 class LogUNet(nn.Module):
-    def __init__(self, env, device='cuda', hidden_dim=256):
+    def __init__(self, env, device='cuda', hidden_dim=256, activation=nn.ReLU):
         super(LogUNet, self).__init__()
         self.env = env
+        self.nA = env.action_space.n
+        self.is_image_space = is_image_space(env.observation_space)
+
         self.device = device
         if isinstance(env.observation_space, spaces.Discrete):
             self.nS = env.observation_space.n
         elif isinstance(env.observation_space, spaces.Box):
-            self.nS = env.observation_space.shape[0]       
-        self.nA = env.action_space.n
+            # check if image:
+            if is_image_space(env.observation_space):
+                self.nS = get_flattened_obs_dim(env.observation_space)
+                # Use a CNN:
+                n_channels = env.observation_space.shape[2]
+                model = nn.Sequential(
+                    nn.Conv2d(n_channels, 32, kernel_size=8, stride=4),
+                    activation(),
+                    nn.Conv2d(32, 16, kernel_size=4, stride=2),
+                    activation(),
+                    nn.Conv2d(16, 16, kernel_size=3, stride=1),
+                    activation(),
+                    nn.Flatten(start_dim=1, end_dim=-1),
+                )
+                model.to(self.device)
+                # calculate resulting shape for FC layers:
+                rand_inp = env.observation_space.sample()
+                x = torch.tensor(rand_inp, device=self.device, dtype=torch.float32)  # Convert to PyTorch tensor
+                x = x.detach()
+                x = preprocess_obs(x, self.env.observation_space)
+                x = x.permute([2,0,1]).unsqueeze(0)
+                flat_size = model(x).shape[1]
+                # flat part
+                model.extend(nn.Sequential(
+                    nn.Linear(flat_size, hidden_dim),
+                    activation(),
+                    nn.Linear(hidden_dim, hidden_dim),
+                    activation(),
+                    nn.Linear(hidden_dim, self.nA),
+                    activation(),
+                ))
+            else:
+                self.nS = env.observation_space.shape[0]
+
+                model = (nn.Sequential(
+                    nn.Linear(self.nS, hidden_dim),
+                    activation(),
+                    nn.Linear(hidden_dim, hidden_dim),
+                    activation(),
+                    nn.Linear(hidden_dim, self.nA),
+                    activation(),
+                ))
+            self.model = model
         self.fc1 = nn.Linear(self.nS, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
         self.fc3 = nn.Linear(hidden_dim, self.nA)
-        self.relu = nn.ReLU()
+        self.activation = activation()
         self.to(device)
      
     def forward(self, x):
@@ -28,13 +72,16 @@ class LogUNet(nn.Module):
             x = torch.tensor(x, device=self.device, dtype=torch.float32)  # Convert to PyTorch tensor
         x = x.detach()
         x = preprocess_obs(x, self.env.observation_space)
-
-        x = self.fc1(x)
-        x = self.relu(x)
-        x = self.fc2(x)
-        x = self.relu(x)
-        x = self.fc3(x)
-
+        # Reshape the image:
+        if self.is_image_space:
+            if len(x.shape) == 3:
+                # Single image
+                x = x.permute([2,0,1])
+                x = x.unsqueeze(0)
+            else:
+                # Batch of images
+                x = x.permute([0,3,1,2])
+        x = self.model(x)
         return x
         
     def choose_action(self, state, greedy=False, prior=None):
@@ -49,11 +96,12 @@ class LogUNet(nn.Module):
                 return a.item()
 
             # First subtract a baseline:
-            # logu = logu - (torch.max(logu) + torch.min(logu))/2
-            # dist = torch.exp(logu) * prior
+            logu = logu - (torch.max(logu) + torch.min(logu))/2
+            # clamp to avoid overflow:
+            dist = torch.exp(logu) * prior
             # dist = dist / torch.sum(dist)
-            # c = Categorical(dist)
-            c = Categorical(logits=logu*prior)
+            c = Categorical(dist)#, validate_args=True)
+            # c = Categorical(logits=logu*prior)
             a = c.sample()
 
         return a.item()
