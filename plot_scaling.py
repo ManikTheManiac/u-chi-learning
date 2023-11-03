@@ -7,8 +7,8 @@ sns.set_theme(style="darkgrid")
 
 folder = 'scaling_expt_results'
 env_id = 'Acrobot-v1'
-
-df = pd.read_csv(os.path.join(folder, f'{env_id}.txt'), header=None)
+algo = 'dqn'
+df = pd.read_csv(os.path.join(folder, f'{env_id}-{algo}.txt'), header=None)
 df.columns = ['hidden_dim', 'auc'] 
 df = df.sort_values(by='hidden_dim')
 # take average over same hidden_dim:
@@ -32,5 +32,5 @@ plt.title(f'{env_id}')
 plt.tight_layout()
 # Draw a star at 64 (where hparam was optimized), plot on top of line:
 plt.plot(64, df[df['hidden_dim']==64]['auc'], marker='*', markersize=20, c='y')
-plt.savefig(f'{env_id}.png')
+plt.savefig(f'{env_id}-{algo}.png')
 plt.close()
