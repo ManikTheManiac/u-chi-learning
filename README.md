@@ -25,17 +25,17 @@ LogU learning implementation in gym (mazes and cartpole)
 - [ ] "..." affect logu divergence? 
 - [ ] Why does using off-policy (pi0) for exploration make logu diverge?
 - [ ] Which activation function is best?
-- [ ] Which aggregration of theta is best (min/mean/max), same for logu (min is suggested to help with over-optimistic behavior)
+- [:white_check_mark:] Which aggregration of theta is best (min/mean/max), same for logu (min is suggested to help with over-optimistic behavior)
 
 # Features requiring experiments:
-- [ ] use target or online logu for exploration (greedy or not?)
+- [:white_check_mark:] use target or online logu for exploration (greedy or not?)
 - [ ] Standard prioritized replay
 - [ ] Clipping theta
-- [ ] smooth out theta learning
+- [x] smooth out theta learning
 
 # Future TODOs:
 - [ ] Generate dependencies
-- [ ] Write tests
+- [:white_check_mark:] Write tests
 - [ ] Make more off-policy / offline?
 - [ ] V learning with cloning
 - [x] UV learning
@@ -67,8 +67,11 @@ I also placed "simple_env" in classic control folder.
 - Important line when facing GL error: export MUJOCO_GL="glfw"
 
 Acrobot performance on logu (note logscale x axis):
+
 ![auc][scaling_logu]
+
 And same for SB3's DQN with their hparams (huggingface):
+
 ![auc][scaling_dqn]
 
 Model-based ground truth comparisons with tabular algorithms:
