@@ -41,7 +41,7 @@ mcar_hparams = {
 }
 
 lunar_hparams = {
-    'beta': 0.01,
+    'beta': 0.1,
     'batch_size': 800,
     'buffer_size': 1_000_000,
     'gradient_steps': 10,

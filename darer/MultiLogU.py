@@ -290,9 +290,9 @@ def main():
     env_id = 'LunarLander-v2'
     # env_id = 'Pong-v'
     # env_id = 'FrozenLake-v1'
-    env_id = 'MountainCar-v0'
+    # env_id = 'MountainCar-v0'
     # env_id = 'Drug-v0'
-    from hparams import acrobot_logu2 as config
+    from hparams import lunar_hparams as config
     agent = LogULearner(env_id, **config, device='cpu', log_interval=500,
                         log_dir='pend', num_nets=2, render=0, aggregator='max')
 
