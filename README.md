@@ -25,17 +25,17 @@ LogU learning implementation in gym (mazes and cartpole)
 - [ ] "..." affect logu divergence? 
 - [ ] Why does using off-policy (pi0) for exploration make logu diverge?
 - [ ] Which activation function is best?
-- [:white_check_mark:] Which aggregration of theta is best (min/mean/max), same for logu (min is suggested to help with over-optimistic behavior)
+- [x] Which aggregration of theta is best (min/mean/max), same for logu (min is suggested to help with over-optimistic behavior)
 
 # Features requiring experiments:
-- [:white_check_mark:] use target or online logu for exploration (greedy or not?)
+- [x] use target or online logu for exploration (greedy or not?)
 - [ ] Standard prioritized replay
 - [ ] Clipping theta
 - [x] smooth out theta learning
 
 # Future TODOs:
 - [ ] Generate dependencies
-- [:white_check_mark:] Write tests
+- [x] Write tests
 - [ ] Make more off-policy / offline?
 - [ ] V learning with cloning
 - [x] UV learning
