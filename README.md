@@ -3,18 +3,17 @@ LogU learning implementation in gym (mazes and cartpole)
 # Simple TODOs:
 - [ ] Compare multilogu w/ and w/o the 1/A factor in chi calc.
 - [ ] Same w/ periodic updates of ref s,a,s'
-- [ ] Implement LR schedule
 - [ ] Create a folder when one is missing for logging
 
 # New (Simple) Features:
 - [x] Monitor FPS
-- [ ] Monitor min/max of logu to watch for divergence
+- [x] Monitor min/max of logu to watch for divergence
 - [ ] Add learning rate decay thru scheduler
 - [x] Add "train_freq" rather than episodic trainin:
 - [ ] Possibly use SB3 style: :param train_freq: Update the model every ``train_freq`` steps. Alternatively pass a tuple of frequency and unit
         like ``(5, "step")`` or ``(2, "episode")``.
 - [x] Add gradient clipping
-- [ ] More clever normalization to avoid logu divergence
+- [x] More clever normalization to avoid logu divergence (just clamping)
 - [ ] Merge Rawlik with LogU as an option. e.g. prior_update_interval=0 for no updates, and otherwise use Rawlik iteration
 - [x] Switch to SB3 Replay Buffer
 
