@@ -316,8 +316,8 @@ def main():
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
     # env_id = 'Drug-v0'
-    from hparams import pong_logu as config
-    agent = LogULearner(env_id, **config, device='cuda', log_interval=5000,
+    from hparams import lunar_hparams as config
+    agent = LogULearner(env_id, **config, device='cpu', log_interval=500,
                         log_dir='pend', num_nets=2, render=0, aggregator='max')
 
     agent.learn(total_timesteps=1_000_000)
