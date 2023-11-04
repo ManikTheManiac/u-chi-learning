@@ -115,6 +115,7 @@ class LogULearner:
             # Calculate the current logu values (feedforward):
             curr_logu = torch.cat([online_logu(states).squeeze().gather(1, actions.long())
                                    for online_logu in self.online_logus], dim=1)
+            
             with torch.no_grad():
                 ref_logus = [logu(self.ref_next_state)
                             for logu in self.online_logus]
@@ -124,8 +125,12 @@ class LogULearner:
                 new_thetas[grad_step, :] = self.ref_reward - torch.log(ref_chi)
 
                 #TODO: this looks wrong (expectation of logu?? should be of u)
-                target_next_logus = [target_logu(next_states)
+                target_next_logus = [target_logu(next_states).clamp(-30, 30)
                                         for target_logu in self.target_logus]
+                # log target logu min and max:
+
+                self.logger.record("train/target_min_logu", target_next_logus[0].min().item())
+                self.logger.record("train/target_max_logu", target_next_logus[0].max().item())
                 target_next_u = torch.stack([torch.exp(target_logu).sum(dim=-1) / self.nA
                                             for target_logu in target_next_logus], dim=-1)
                 target_next_logu = torch.log(target_next_u)
@@ -137,17 +142,24 @@ class LogULearner:
                     next_logu = next_logu.unsqueeze(1)
                 # When an episode terminates, next_logu should be theta or zero?:
                 assert next_logu.shape == dones.shape
-                next_logu = next_logu * (1 - dones) + self.theta * dones
+                next_logu = next_logu * (1 - dones) #+ self.theta * dones
+
                 # "Backup" eigenvector equation:
                 expected_curr_logu = self.beta * (rewards + self.theta) + next_logu
                 expected_curr_logu = expected_curr_logu.squeeze(1)
+                # clamp the logu values to avoid overflow:
+                # expected_curr_logu = torch.clamp(expected_curr_logu, -10, 10)
                 # calculate theta in a similar way:
                 # next_chi = torch.stack([torch.exp(next_logu_val).sum(dim=-1) / self.env.action_space.n
                 # new_thetas = rewards + 1/self.beta * (next_chi - curr_logu)
 
-            
+
+            expected_curr_logu = torch.clamp(expected_curr_logu, -30, 30)
+            curr_logu = torch.clamp(curr_logu, -30, 30)
             self.logger.record("train/theta", self.theta.item())
             self.logger.record("train/avg logu", curr_logu.mean().item())
+            self.logger.record("train/min logu", curr_logu.min().item())
+            self.logger.record("train/max logu", curr_logu.max().item())
 
             # Calculate the logu ("critic") loss:
             loss = 0.5*sum(self.loss_fn(logu, expected_curr_logu)
@@ -213,12 +225,15 @@ class LogULearner:
                 train_this_step = (self.train_freq == -1 and terminated) or \
                     (self.train_freq != -1 and self.env_steps % self.train_freq == 0)
                 if train_this_step:
-                    if self.env_steps > self.learning_starts: #self.batch_size: #
+                    if self.env_steps > self.batch_size:#self.learning_starts:
                         self.train()
 
                 if self.env_steps % self.target_update_interval == 0:
                     # Do a Polyak update of parameters:
                     self.target_logus.polyak(self.online_logus, self.tau)
+
+                    # Update beta:
+                    # self.beta = min(20, self.beta+1e-2)
 
                 #TODO: implement beta schedule
                 self.env_steps += 1
@@ -241,8 +256,9 @@ class LogULearner:
             # fps averaged over log_interval steps:
             fps = self.log_interval / ((t_final - self.t0) / 1e9)
 
-            avg_eval_rwd = self.evaluate()
-            self.eval_auc += avg_eval_rwd
+            if self.env_steps >= 0:
+                avg_eval_rwd = self.evaluate()
+                self.eval_auc += avg_eval_rwd
             if self.save_checkpoints:
                 torch.save(self.online_logu.state_dict(),
                            'sql-policy.para')
@@ -259,15 +275,19 @@ class LogULearner:
             self.t0 = time.thread_time_ns()
 
 
-    def evaluate(self, n_episodes=5):
+    def evaluate(self, n_episodes=2):
         # run the current policy and return the average reward
         avg_reward = 0.
+        # log the action frequencies:
+        action_freqs = torch.zeros(self.nA)
         for ep in range(n_episodes):
             state, _ = self.eval_env.reset()
             done = False
             n_steps = 0
             while not done:
                 action = self.online_logus.greedy_action(state)
+                # action = self.online_logus.choose_action(state)
+                action_freqs[action] += 1
                 action = action.item()
                 # action = self.online_logus.choose_action(state)
                 n_steps += 1
@@ -279,6 +299,10 @@ class LogULearner:
                 done = terminated or truncated
 
         avg_reward /= n_episodes
+        # log the action frequencies:
+        action_freqs /= n_episodes
+        for i, freq in enumerate(action_freqs):
+            self.logger.record(f'eval/action_freq_{i}', freq.item())
         return avg_reward
 
 
@@ -288,7 +312,7 @@ def main():
     # env_id = 'CliffWalking-v0'
     env_id = 'Acrobot-v1'
     env_id = 'LunarLander-v2'
-    # env_id = 'Pong-v'
+    env_id = 'Pong-v4'
     # env_id = 'FrozenLake-v1'
     # env_id = 'MountainCar-v0'
     # env_id = 'Drug-v0'

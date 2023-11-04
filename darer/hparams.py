@@ -41,7 +41,7 @@ mcar_hparams = {
 }
 
 lunar_hparams = {
-    'beta': 0.1,
+    'beta': 0.71,
     'batch_size': 800,
     'buffer_size': 1_000_000,
     'gradient_steps': 10,
@@ -160,7 +160,7 @@ cartpole_dqn = {
 acrobot_logu = {
     'beta': 0.2,
     'batch_size': 855,
-    'buffer_size': 100_000,
+    'buffer_size': 5_000,
     'gradient_steps': 1,
     'learning_rate': 7.e-3,
     'target_update_interval': 6,
@@ -170,6 +170,20 @@ acrobot_logu = {
     'hidden_dim': 16,
     'learning_starts': 1_000
 }
+
+pong_logu = {
+    'beta': 2.2,
+    'batch_size': 32,
+    'buffer_size': 100_000,
+    'gradient_steps': 1,
+    'learning_rate': 1.e-4,
+    'target_update_interval': 100,
+    'tau': 0.05,
+    'tau_theta': 0.98,
+    'train_freq': 4,
+    'learning_starts': 25_000
+}
+
 
 acrobot_logu2 = {
     'beta': 3.12,
@@ -201,16 +215,17 @@ cheetah_hparams = {
 
 
 cheetah_hparams2 = {
-    'batch_size': 300,
-    'beta': 1,
+    'batch_size': 600,
+    'beta': 10,
     'buffer_size': 1_000_000,
     'gradient_steps': 1,
     'learning_rate': 3e-4,
-    'target_update_interval': 15,
-    'tau': 0.99,
-    'tau_theta': 0.9,
+    'target_update_interval': 650,
+    'tau': 0.95,
+    'tau_theta': 0.98,
     'train_freq': 1,
     'hidden_dim': 128,
+    'learning_starts': 5_000
 }
 
 acrobot_dqn = {
@@ -232,6 +247,11 @@ mcar_dqn = {
     'train_freq': 16,
 
 }
+
+ft_dqn_hparams = {
+
+
+}
 # Set up a table of algos/envs to configs:
 cartpoles = {
     'logu': cartpole_hparams0,
@@ -248,7 +268,8 @@ acrobots = {
 mcars = {
     'logu': mcar_hparams,
     # 'ppo': mcar_ppo,
-    'dqn': mcar_dqn
+    'dqn': mcar_dqn,
+    'ft-dqn': ft_dqn_hparams
 }
 
 # lunars = {

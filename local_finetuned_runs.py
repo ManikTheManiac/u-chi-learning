@@ -37,7 +37,7 @@ def runner(algo):
     model = algo(env, **config, log_dir='ft/mcar',
                  device='cuda', log_interval=250)
                 #, num_nets=2, aggregator='max')
-    model.learn(total_timesteps=120_000)
+    model.learn(total_timesteps=500_000)
 
 
 if __name__ == '__main__':
