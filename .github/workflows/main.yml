@@ -21,7 +21,8 @@ jobs:
           python -m pip install pip==21
           pip install pytest
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          export PYTHONPATH=$(pwd)/darer
+          
       - name: Test with pytest
         run: |
+          export PYTHONPATH=$(pwd)/darer
           pytest

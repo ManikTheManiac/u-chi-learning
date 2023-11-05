@@ -1,40 +1,82 @@
 import torch
 import torch.nn as nn
 from torch.distributions import Categorical
-from stable_baselines3.common.preprocessing import preprocess_obs, get_action_dim, get_flattened_obs_dim, get_obs_shape
+from stable_baselines3.common.preprocessing import is_image_space, preprocess_obs, get_action_dim, get_flattened_obs_dim, get_obs_shape
 import numpy as np
 from stable_baselines3.common.utils import zip_strict
 from gymnasium import spaces
 import gymnasium as gym
 
 class LogUNet(nn.Module):
-    def __init__(self, env, device='cuda', hidden_dim=256):
+    def __init__(self, env, device='cuda', hidden_dim=256, activation=nn.ReLU):
         super(LogUNet, self).__init__()
         self.env = env
+        self.nA = env.action_space.n
+        self.is_image_space = is_image_space(env.observation_space)
+
         self.device = device
         if isinstance(env.observation_space, spaces.Discrete):
             self.nS = env.observation_space.n
         elif isinstance(env.observation_space, spaces.Box):
-            self.nS = env.observation_space.shape[0]       
-        self.nA = env.action_space.n
-        self.fc1 = nn.Linear(self.nS, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = nn.Linear(hidden_dim, self.nA)
-        self.relu = nn.ReLU()
+            # check if image:
+            if is_image_space(env.observation_space):
+                self.nS = get_flattened_obs_dim(env.observation_space)
+                # Use a CNN:
+                n_channels = env.observation_space.shape[2]
+                model = nn.Sequential(
+                    nn.Conv2d(n_channels, 64, kernel_size=8, stride=4),
+                    activation(),
+                    nn.Conv2d(64, 32, kernel_size=4, stride=2),
+                    activation(),
+                    nn.Conv2d(32, 32, kernel_size=3, stride=1),
+                    activation(),
+                    nn.Flatten(start_dim=1, end_dim=-1),
+                )
+                model.to(self.device)
+                # calculate resulting shape for FC layers:
+                rand_inp = env.observation_space.sample()
+                x = torch.tensor(rand_inp, device=self.device, dtype=torch.float32)  # Convert to PyTorch tensor
+                x = x.detach()
+                x = preprocess_obs(x, self.env.observation_space)
+                x = x.permute([2,0,1]).unsqueeze(0)
+                flat_size = model(x).shape[1]
+                print(f"Using a CNN with {flat_size}-dim. outputs.")
+                # flat part
+                model.extend(nn.Sequential(
+                    nn.Linear(flat_size, hidden_dim),
+                    activation(),
+                    nn.Linear(hidden_dim, hidden_dim),
+                    activation(),
+                    nn.Linear(hidden_dim, self.nA),
+                ))
+            else:
+                self.nS = env.observation_space.shape[0]
+
+                model = (nn.Sequential(
+                    nn.Linear(self.nS, hidden_dim),
+                    activation(),
+                    nn.Linear(hidden_dim, hidden_dim),
+                    activation(),
+                    nn.Linear(hidden_dim, self.nA),
+                ))
+            self.model = model
         self.to(device)
      
     def forward(self, x):
         if not isinstance(x, torch.Tensor):
-            x = torch.tensor(x, device=self.device)#, dtype=torch.float32).detach()  # Convert to PyTorch tensor
-
+            x = torch.tensor(x, device=self.device, dtype=torch.float32)  # Convert to PyTorch tensor
+        # x = x.detach()
         x = preprocess_obs(x, self.env.observation_space)
-
-        x = self.fc1(x)
-        x = self.relu(x)
-        x = self.fc2(x)
-        x = self.relu(x)
-        x = self.fc3(x)
-
+        # Reshape the image:
+        if self.is_image_space:
+            if len(x.shape) == 3:
+                # Single image
+                x = x.permute([2,0,1])
+                x = x.unsqueeze(0)
+            else:
+                # Batch of images
+                x = x.permute([0,3,1,2])
+        x = self.model(x)
         return x
         
     def choose_action(self, state, greedy=False, prior=None):
@@ -50,61 +92,12 @@ class LogUNet(nn.Module):
 
             # First subtract a baseline:
             logu = logu - (torch.max(logu) + torch.min(logu))/2
+            # clamp to avoid overflow:
+            logu = torch.clamp(logu, min=-20, max=20)
             dist = torch.exp(logu) * prior
             # dist = dist / torch.sum(dist)
-            c = Categorical(dist)
-            a = c.sample()
-
-        return a.item()
-
-
-class UNet(nn.Module):
-    def __init__(self, env, device='cuda', hidden_dim=256):
-        super(UNet, self).__init__()
-        self.env = env
-        self.device = device
-        if isinstance(env.observation_space, spaces.Discrete):
-            self.nS = env.observation_space.n
-        elif isinstance(env.observation_space, spaces.Box):
-            self.nS = env.observation_space.shape[0]
-
-        self.nA = env.action_space.n
-        self.fc1 = nn.Linear(self.nS, hidden_dim, device=self.device)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim, device=self.device)
-        self.fc3 = nn.Linear(hidden_dim, self.nA, device=self.device)
-        self.relu = nn.Tanh()
-        # self.relu = nn.LeakyReLU()
-     
-    def forward(self, x):
-        if not isinstance(x, torch.Tensor):
-            x = torch.tensor(x, device=self.device, dtype=torch.float32).detach()  # Convert to PyTorch tensor
-
-        x = preprocess_obs(x, self.env.observation_space)
-
-        x = self.fc1(x)
-        x = self.relu(x)
-        x = self.fc2(x)
-        x = self.relu(x)
-        x = self.fc3(x)
-
-        return torch.abs(x)
-        # return self.relu(x+4) + 1e-6
-        
-    def choose_action(self, state, greedy=False):
-        with torch.no_grad():
-            u = self.forward(state)
-
-            if greedy:
-                a = u.argmax()
-                return a.item()
-
-            # First subtract a baseline:
-            # u = u - (torch.max(u) + torch.min(u))/2
-            # print(u)
-            dist = u * 1 / self.nA
-            dist = dist / torch.sum(dist)
-            # print(dist)
-            c = Categorical(dist)
+            c = Categorical(dist)#, validate_args=True)
+            # c = Categorical(logits=logu*prior)
             a = c.sample()
 
         return a.item()
@@ -128,7 +121,6 @@ class TargetNets():
         self.nets = list_of_nets
     def __len__(self):
         return len(self.nets)
-
     def __iter__(self):
         return iter(self.nets)
 
@@ -145,8 +137,9 @@ class TargetNets():
         if len(list_of_state_dicts) != len(self):
             raise ValueError("Number of state dictionaries does not match the number of target networks.")
         
-        for new_state, target_net in zip(list_of_state_dicts, self):
-            target_net.load_state_dict(new_state)
+        for online_net_dict, target_net in zip(list_of_state_dicts, self):
+            
+            target_net.load_state_dict(online_net_dict)
 
     def polyak(self, online_nets, tau):
         """
@@ -163,9 +156,14 @@ class TargetNets():
             raise ValueError("Number of online networks does not match the number of target networks.")
 
         with torch.no_grad():
-            for online_net, target_net in zip(online_nets, self.nets):
-                for online_param, target_param in zip(online_net.parameters(), target_net.parameters()):
-                    target_param.data.mul_(tau).add_(online_param.data, alpha=1.0 - tau)
+            # zip does not raise an exception if length of parameters does not match.
+            for new_params, target_params in zip(online_nets.parameters(), self.parameters()):
+                for new_param, target_param in zip_strict(new_params, target_params):
+                    # target_param.data.mul_(tau)
+                    # new_param.data.mul_(1 - tau)
+                    # target_param.data.add_(new_param.data)
+                    target_param.data.mul_(tau).add_(new_param.data, alpha=1.0-tau)
+                    # torch.add(target_param.data, new_param.data, out=target_param.data)
 
     def parameters(self):
         """
@@ -177,104 +175,55 @@ class TargetNets():
         return [net.parameters() for net in self.nets]
 
 
-import torch
-import torch.distributions as dist
-
-class OnlineNets:
+class OnlineNets():
     """
     A utility class for managing online networks in reinforcement learning.
 
     Args:
         list_of_nets (list): A list of online networks.
     """
-
-    def __init__(self, list_of_nets):
+    def __init__(self, list_of_nets, aggregator='min'):
         self.nets = list_of_nets
+        if aggregator == 'min':
+            self.aggregator = torch.min
+        elif aggregator == 'mean':
+            self.aggregator = torch.mean
+        elif aggregator == 'max':
+            self.aggregator = torch.max
 
     def __len__(self):
         return len(self.nets)
-
+    
     def __iter__(self):
         return iter(self.nets)
-
+    
     def greedy_action(self, state):
-        """
-        Select a greedy action based on the online networks.
-
-        Args:
-            state (torch.Tensor): The input state.
-
-        Returns:
-            int: The index of the greedy action.
-        """
         with torch.no_grad():
-            logu_stacked = torch.stack([net(state) for net in self])
-            logu = logu_stacked.squeeze(1)
-            logu = torch.min(logu, dim=0)[0]
-            greedy_action = logu.argmax()
-            # check if the nets agree:
-            all_greedys = logu_stacked.argmax(dim=-1)
-            agreed = torch.all(all_greedys == greedy_action)
-            # print(agreed)
-        return greedy_action.item(), agreed
-
-    def choose_action(self, state, prior=None):
-        # Validate the input state
-        # assert isinstance(state, torch.Tensor), "Input state must be a PyTorch tensor"
-        # assert state.shape == (batch_size, state_dim), "Invalid state shape"
-
-        # Get actions from each network
-        logus = torch.stack([net.forward(state) for net in self])
-        logus = logus.squeeze(1)
-        logu = torch.min(logus, dim=0)[0] # pessimistic values for approximation of true value
-        
-        # print(actions)
-        if prior is None:
-            # If no prior is provided, sample uniformly
-            # action = np.random.choice(actions)
+            # logu = torch.stack([net(state) for net in self.nets], dim=-1)
+            # logu = logu.squeeze(1)
+            # logu = self.aggregator(logu, dim=-1)[0]
             
-            # First subtract a baseline:
-            logu = logu - (torch.max(logu) + torch.min(logu))/2
-            # print(u)
-            u = torch.exp(logu)
-            dist = u * 1 / 2
-            dist = dist / torch.sum(dist)
-            # print(dist)
-            c = Categorical(dist)
-            action = c.sample()
+            # greedy_action = logu.argmax()
+            # greedy_actions = [net(state).argmax().cpu() for net in self.nets]
+            greedy_actions = [net.choose_action(state, greedy=True) for net in self.nets]
+            greedy_action = np.random.choice(greedy_actions)
+        return greedy_action
+        # return greedy_action.item()
 
-            # action = actions[0]
-        # else:
-        #     # Ensure that prior is a list of weights (e.g., [0.2, 0.3, 0.5])
-        #     assert isinstance(prior, list), "Prior must be a list of weights"
-        #     assert len(prior) == len(actions), "Prior length must match the number of networks"
-
-        #     # Normalize the prior weights to create a probability distribution
-        #     prior_prob = [weight / sum(prior) for weight in prior]
-
-        #     # Sample an action based on the prior distribution
-        #     action = np.random.choice(actions, p=prior_prob)
-
-        return action.item()
+    def choose_action(self, state):
+        # Get a sample from each net, then sample uniformly over them:
+        actions = [net.choose_action(state) for net in self.nets]
+        action = np.random.choice(actions)
+        # perhaps re-weight this based on pessimism?
+        return action
 
     def parameters(self):
-        """
-        Get the parameters of all online networks.
-
-        Returns:
-            list: A list of network parameters for each online network.
-        """
         return [net.parameters() for net in self]
 
     def clip_grad_norm(self, max_grad_norm):
-        """
-        Clip gradients for all online networks.
-
-        Args:
-            max_grad_norm (float): Maximum gradient norm for clipping.
-        """
         for net in self:
             torch.nn.utils.clip_grad_norm_(net.parameters(), max_grad_norm)
+
 
 class LogUsa(nn.Module):
     def __init__(self, env, hidden_dim=256, device='cuda'):

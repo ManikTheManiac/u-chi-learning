@@ -1,15 +1,14 @@
 cartpole_hparams0 = {
     'beta': 0.1,
-    'batch_size': 300,
+    'batch_size': 400,
     'buffer_size': 150000,
-    'gradient_steps': 1,
-    'learning_rate': 2e-3,
+    'gradient_steps': 20,
+    'learning_rate': 5.5e-3,
     'target_update_interval': 70,
     'tau': 0.85,
-    'theta_update_interval': 1,
-    'tau_theta': 0.4,
+    'tau_theta': 0.85,
     'hidden_dim': 64,
-    'train_freq': 1,
+    'train_freq': 20,
     'learning_starts': 1000
 }
 
@@ -42,16 +41,17 @@ mcar_hparams = {
 }
 
 lunar_hparams = {
-    'beta': 0.18,
+    'beta': 0.71,
     'batch_size': 800,
     'buffer_size': 1_000_000,
-    'gradient_steps': 1,
-    'learning_rate': 7.2e-5,
-    'target_update_interval': 270,
-    'tau': 0.28,
-    'tau_theta': 0.23,
-    'hidden_dim': 64,
-    'train_freq': 12
+    'gradient_steps': 10,
+    'learning_rate': 7.2e-4,
+    'target_update_interval': 500,
+    'tau': 0.9,
+    'tau_theta': 0.85,
+    'hidden_dim': 128,
+    'train_freq': 20,
+    'learning_starts': 10_000
 }
 
 mcar_hparams2 = {
@@ -160,14 +160,43 @@ cartpole_dqn = {
 acrobot_logu = {
     'beta': 0.2,
     'batch_size': 855,
-    'buffer_size': 100_000,
+    'buffer_size': 5_000,
     'gradient_steps': 1,
     'learning_rate': 7.e-3,
     'target_update_interval': 6,
     'tau': 0.57,
     'tau_theta': 0.90,
     'train_freq': 1,
-    'hidden_dim': 64,
+    'hidden_dim': 16,
+    'learning_starts': 1_000
+}
+
+pong_logu = {
+    'beta': 2.2,
+    'batch_size': 32,
+    'buffer_size': 100_000,
+    'gradient_steps': 1,
+    'learning_rate': 1.e-4,
+    'target_update_interval': 100,
+    'tau': 0.05,
+    'tau_theta': 0.98,
+    'train_freq': 4,
+    'learning_starts': 25_000
+}
+
+
+acrobot_logu2 = {
+    'beta': 3.12,
+    'batch_size': 635,
+    'buffer_size': 100_000,
+    'gradient_steps': 1,
+    'learning_rate': 9.e-5,
+    'target_update_interval': 4,
+    'tau': 0.95,
+    'tau_theta': 0.98,
+    'train_freq': 1,
+    'hidden_dim': 128,
+    'theta_update_interval': 20,
     'learning_starts': 1_000
 }
 
@@ -186,30 +215,65 @@ cheetah_hparams = {
 
 
 cheetah_hparams2 = {
-    'batch_size': 200,
-    'beta': 10,#0.87,
+    'batch_size': 600,
+    'beta': 10,
     'buffer_size': 1_000_000,
     'gradient_steps': 1,
-    'learning_rate': 3.e-4,
-    'actor_learning_rate': 1.e-5,
-    'target_update_interval': 8,
-    'theta_update_interval': 10,
-    'tau': 0.84,
-    'tau_theta': 0.955,
+    'learning_rate': 3e-4,
+    'target_update_interval': 650,
+    'tau': 0.95,
+    'tau_theta': 0.98,
     'train_freq': 1,
-    'hidden_dim': 256,
+    'hidden_dim': 128,
+    'learning_starts': 5_000
 }
 
-lunar_hparams_logu = {
-    'batch_size': 200,
-    'beta': 6.,
-    'hidden_dim': 256,
-    'learning_rate': 6e-4,
-    'target_update_interval': 1500,
-    'tau': 0.3,
-    'tau_theta': 0.95,
-    'theta_update_interval': 35,
-    'buffer_size': 50_000,
-    'gradient_steps': 4,
-    'train_freq': 12,
+acrobot_dqn = {
+
 }
+
+mcar_dqn = {
+    'batch_size': 128,
+    'buffer_size': 10_000,
+    'exploration_final_eps': 0.07,
+    'exploration_fraction': 0.2,
+    'gamma': 0.98,
+    'gradient_steps': 8,
+    'hidden_dim': 256,
+    'learning_rate': 0.004,
+    'learning_starts': 1000,
+    'target_update_interval': 600,
+    'learning_starts': 1000,
+    'train_freq': 16,
+
+}
+
+ft_dqn_hparams = {
+
+
+}
+# Set up a table of algos/envs to configs:
+cartpoles = {
+    'logu': cartpole_hparams0,
+    'dqn': cartpole_dqn,
+    'ppo': cartpole_ppo
+}
+
+acrobots = {
+    'logu': acrobot_logu,
+    'ppo': acrobot_ppo,
+    'dqn': acrobot_dqn
+}
+
+mcars = {
+    'logu': mcar_hparams,
+    # 'ppo': mcar_ppo,
+    'dqn': mcar_dqn,
+    'ft-dqn': ft_dqn_hparams
+}
+
+# lunars = {
+#     'logu': lunar_hparams_logu,
+#     'ppo': lunar_ppo,
+#     'dqn': lunar_dqn
+# }

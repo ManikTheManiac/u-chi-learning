@@ -1,7 +1,6 @@
 import argparse
 from darer.MultiLogU import LogULearner
 from CustomDQN import CustomDQN
-from LogURawlik import LogULearner
 from CustomPPO import CustomPPO
 # from LogU import LogULearner
 from MultiLogU import LogULearner
@@ -9,36 +8,36 @@ from hparams import *
 import time
 
 # env = 'CartPole-v1'
-env = 'LunarLander-v2'
+# env = 'LunarLander-v2'
 # env = 'Acrobot-v1'
-# env = 'MountainCar-v0'
-# algo_to_config = {'logu': cartpole_hparams0, 'dqn': cartpole_dqn}
-# env_to
+env = 'MountainCar-v0'
+
+str_to_algo = {
+    'logu': LogULearner,
+    'ppo': CustomPPO,
+    'dqn': CustomDQN
+}
+
+
 
 def runner(algo):
-    if algo == 'logu':
-        if env == 'CartPole-v1':
-            config = cartpole_hparams2
-        elif env == 'MountainCar-v0':
-            config = mcar_hparams
-        elif env == 'Acrobot-v1':
-            config = acrobot_logu
-        elif env == 'LunarLander-v2':
-            config = lunar_hparams_logu
-        algo = LogULearner
-    elif algo == 'dqn':
-        config = cartpole_dqn
-        algo = CustomDQN
-    elif algo == 'ppo':
-        if env == 'CartPole-v1':
-            config = cartpole_ppo
-        elif env == 'Acrobot-v1':
-            config = acrobot_ppo
-        algo = CustomPPO
+    if env == 'MountainCar-v0':
+        configs = mcars
+    elif env == 'CartPole-v1':
+        configs = cartpoles
+    # elif env == 'LunarLander-v2':
+    #     configs = lunars
+    elif env == 'Acrobot-v1':
+        configs = acrobots
 
-    model = algo(env, **config, log_dir='ft/lunar',
-                 device='cpu', log_interval=250, num_nets=1)
-    model.learn(total_timesteps=200_000)
+    # Now access the config for this algo:
+    config = configs[algo]
+    algo = str_to_algo[algo]
+
+    model = algo(env, **config, log_dir='ft/mcar',
+                 device='cuda', log_interval=250)
+                #, num_nets=2, aggregator='max')
+    model.learn(total_timesteps=500_000)
 
 
 if __name__ == '__main__':
