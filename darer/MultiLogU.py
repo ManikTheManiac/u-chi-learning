@@ -226,7 +226,7 @@ class LogULearner:
             # end timer:
             t_final = time.thread_time_ns()
             # fps averaged over log_interval steps:
-            fps = self.log_interval / ((t_final - self.t0) / 1e9)
+            fps = self.log_interval / ((t_final - self.t0 + 1e-8) / 1e9)
 
             avg_eval_rwd = self.evaluate()
             self.eval_auc += avg_eval_rwd
@@ -284,7 +284,7 @@ def main():
     # env_id = 'Drug-v0'
     from hparams import cartpole_hparams0 as config
     agent = LogULearner(env_id, **config, device='cpu', log_interval=100,
-                        log_dir='pend', num_nets=2, render=0)
+                        log_dir='pend', num_nets=2, render=1)
     # agent = CustomDQN(env_id, device='cuda', **config)
 
     agent.learn(total_timesteps=1_000_000)
